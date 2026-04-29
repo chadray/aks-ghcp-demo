@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scenario-applogs
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: applogs-demo
+  namespace: scenario-applogs
+  labels:
+    scenario: application-logs
+    app: demo-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-app
+      scenario: application-logs
+  template:
+    metadata:
+      labels:
+        app: demo-app
+        scenario: application-logs
+    spec:
+      containers:
+      - name: app
+        image: docker.io/library/python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: ["python3"]
+        args:
+        - "-c"
+        - |
+          import http.server
+          import socketserver
+          import threading
+          import time
+          import json
+          import random
+          import os
+          from datetime import datetime
+
+          PORT = 8080
+          REQUEST_COUNT = 0
+          ERROR_COUNT = 0
+
+          class LogEntry:
+              def __init__(self, level, message, request_id=None):
+                  self.timestamp = datetime.now().isoformat()
+                  self.level = level
+                  self.message = message
+                  self.pid = os.getpid()
+                  self.request_id = request_id or str(random.randint(10000, 99999))
+
+              def __str__(self):
+                  return f"[{self.timestamp}] [{self.level}] [PID:{self.pid}] [REQ:{self.request_id}] {self.message}"
+
+          def log(level, message, request_id=None):
+              entry = LogEntry(level, message, request_id)
+              print(str(entry), flush=True)
+
+          class AppRequestHandler(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  global REQUEST_COUNT, ERROR_COUNT
+                  request_id = f"{REQUEST_COUNT:05d}"
+                  REQUEST_COUNT += 1
+
+                  if self.path == "/health":
+                      log("INFO", "Health check", request_id)
+                      self.send_response(200)
+                      self.send_header('Content-type', 'application/json')
+                      self.end_headers()
+                      self.wfile.write(json.dumps({"status": "ok"}).encode())
+                      return
+
+                  if self.path == "/ready":
+                      self.send_response(200)
+                      self.send_header('Content-type', 'application/json')
+                      self.end_headers()
+                      self.wfile.write(json.dumps({"ready": True}).encode())
+                      return
+
+                  if self.path == "/api/data":
+                      log("INFO", "Processing request", request_id)
+                      if random.random() < 0.4:
+                          ERROR_COUNT += 1
+                          log("ERROR", "Database timeout", request_id)
+                          self.send_response(500)
+                          self.send_header('Content-type', 'application/json')
+                          self.end_headers()
+                          self.wfile.write(json.dumps({"error": "DB Error"}).encode())
+                      else:
+                          log("INFO", "Success", request_id)
+                          self.send_response(200)
+                          self.send_header('Content-type', 'application/json')
+                          self.end_headers()
+                          self.wfile.write(json.dumps({"status": "ok"}).encode())
+                      return
+
+                  self.send_response(404)
+                  self.send_header('Content-type', 'application/json')
+                  self.end_headers()
+                  self.wfile.write(json.dumps({"error": "Not found"}).encode())
+
+              def log_message(self, format, *args):
+                  pass
+
+          log("INFO", "Starting application")
+          log("INFO", f"PID: {os.getpid()}")
+
+          with socketserver.TCPServer(("", PORT), AppRequestHandler) as httpd:
+              log("INFO", "Server ready")
+              httpd.serve_forever()
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      restartPolicy: Always

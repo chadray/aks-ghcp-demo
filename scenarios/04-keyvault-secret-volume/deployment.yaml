@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scenario-keyvault
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keyvault-demo-sa
+  namespace: scenario-keyvault
+  annotations:
+    azure.workload.identity/client-id: "${WORKLOAD_IDENTITY_CLIENT_ID}"
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: keyvault-secret-provider
+  namespace: scenario-keyvault
+spec:
+  provider: azure
+  parameters:
+    usePodIdentity: "false"
+    clientID: "${WORKLOAD_IDENTITY_CLIENT_ID}"
+    keyvaultName: "${KEY_VAULT_NAME}"
+    tenantId: "${TENANT_ID}"
+    objects: |
+      array:
+        - |
+          objectName: demo-secret
+          objectType: secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keyvault-demo
+  namespace: scenario-keyvault
+  labels:
+    scenario: keyvault-secret-volume
+    app: keyvault-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keyvault-demo
+      scenario: keyvault-secret-volume
+  template:
+    metadata:
+      labels:
+        app: keyvault-demo
+        scenario: keyvault-secret-volume
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: keyvault-demo-sa
+      containers:
+      - name: app
+        image: docker.io/library/python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: ["python3"]
+        args:
+        - "-c"
+        - |
+          import time
+          import os
+          import sys
+
+          SECRET_PATH = '/mnt/secrets/demo-secret'
+
+          print('=== Key Vault Secret Volume Demo ===', flush=True)
+          print(f'Process ID: {os.getpid()}', flush=True)
+          print(f'Looking for secret at: {SECRET_PATH}', flush=True)
+          print('', flush=True)
+
+          while True:
+              try:
+                  with open(SECRET_PATH, 'r') as f:
+                      secret_value = f.read().strip()
+                  print(f'[OK] Secret mounted successfully. Value length: {len(secret_value)} chars', flush=True)
+                  print(f'[OK] Secret preview: {secret_value[:4]}****', flush=True)
+              except FileNotFoundError:
+                  print(f'[ERROR] Secret file not found at {SECRET_PATH}', flush=True)
+                  print('[ERROR] The CSI secret volume may not be mounted correctly', flush=True)
+              except PermissionError:
+                  print(f'[ERROR] Permission denied reading {SECRET_PATH}', flush=True)
+              except Exception as e:
+                  print(f'[ERROR] Unexpected error: {e}', flush=True)
+
+              print('[INFO] Next check in 30 seconds...', flush=True)
+              time.sleep(30)
+        volumeMounts:
+        - name: secrets-store
+          mountPath: /mnt/secrets
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      volumes:
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: keyvault-secret-provider

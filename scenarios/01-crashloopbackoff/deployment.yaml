@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scenario-crashloop
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop-demo
+  namespace: scenario-crashloop
+  labels:
+    scenario: crashloopbackoff
+    app: demo-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-app
+      scenario: crashloopbackoff
+  template:
+    metadata:
+      labels:
+        app: demo-app
+        scenario: crashloopbackoff
+    spec:
+      containers:
+      - name: app
+        image: docker.io/library/python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        command: ["python3"]
+        args: ["-c", "
+import sys
+import os
+import time
+print('Application starting...', flush=True)
+print(f'Process ID: {os.getpid()}', flush=True)
+print('Attempting to load configuration...', flush=True)
+config_path = '/app/config/application.conf'
+try:
+    with open(config_path, 'r') as f:
+        config = f.read()
+    print(f'Configuration loaded from {config_path}', flush=True)
+except FileNotFoundError as e:
+    print(f'ERROR: Configuration file not found at {config_path}', flush=True)
+    print(f'Details: {str(e)}', flush=True)
+    print('FATAL: Cannot start application without configuration', flush=True)
+    sys.exit(1)
+except Exception as e:
+    print(f'ERROR: Unexpected error loading configuration: {str(e)}', flush=True)
+    sys.exit(1)
+        "]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      restartPolicy: Always

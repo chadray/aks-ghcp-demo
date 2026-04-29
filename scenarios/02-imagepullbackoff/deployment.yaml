@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scenario-imagepull
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagepull-demo
+  namespace: scenario-imagepull
+  labels:
+    scenario: imagepullbackoff
+    app: demo-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-app
+      scenario: imagepullbackoff
+  template:
+    metadata:
+      labels:
+        app: demo-app
+        scenario: imagepullbackoff
+    spec:
+      containers:
+      - name: app
+        # This image doesn't exist - it will trigger ImagePullBackOff
+        image: docker.io/mycompany/myapp:v99.99.99
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      restartPolicy: Always

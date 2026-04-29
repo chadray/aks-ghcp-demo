@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "westus2"
+    },
+    "clusterName": {
+      "value": "aks-ghcp-demo"
+    },
+    "dnsPrefix": {
+      "value": "aksghdemo"
+    },
+    "vmSize": {
+      "value": "Standard_D2s_v6"
+    },
+    "nodeCount": {
+      "value": 2
+    },
+    "kubernetesVersion": {
+      "value": "1.34.4"
+    },
+    "keyVaultName": {
+      "value": "aks-ghcp-demo-kv"
+    }
+  }
+}
