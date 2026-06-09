@@ -50,6 +50,14 @@ This demo includes:
 - Docker installed (for building container images)
 - GitHub Copilot CLI installed (`gh copilot`)
 
+> **Tip — Automated Setup:** A PowerShell script is provided in the [`Utilities/`](Utilities/) folder that can install or update all of the prerequisites listed above using `winget`. Run it in an elevated PowerShell window:
+>
+> ```powershell
+> .\Utilities\setup-dev-tools.ps1
+> ```
+>
+> The script installs Azure CLI, Helm, kubectl, Docker Desktop, GitHub CLI, and the GitHub Copilot CLI extension (`gh-copilot`). If a tool is already installed it will be upgraded to the latest version.
+
 ### 1. Deploy AKS Infrastructure
 
 ```bash
@@ -110,6 +118,8 @@ kubectl get events -n scenario-1 | gh copilot explain
 ```
 aks-ghcp-demo/
 ├── README.md (this file)
+├── Utilities/
+│   └── setup-dev-tools.ps1
 ├── infrastructure/
 │   ├── main.bicep
 │   ├── parameters.json
