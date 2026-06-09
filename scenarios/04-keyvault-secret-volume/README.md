@@ -76,6 +76,21 @@ az aks get-credentials \
   --overwrite-existing
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+cd infrastructure
+az deployment group create `
+  --resource-group ghcp-demo-rg `
+  --template-file main.bicep `
+  --parameters parameters.json
+
+az aks get-credentials `
+  --resource-group ghcp-demo-rg `
+  --name aks-ghcp-demo `
+  --overwrite-existing
+```
+
 ### 2. Run the Setup Script
 
 The setup script retrieves deployment outputs, seeds a secret into Key Vault, and generates/applies the Kubernetes manifests:
@@ -84,6 +99,15 @@ The setup script retrieves deployment outputs, seeds a secret into Key Vault, an
 cd scenarios/04-keyvault-secret-volume
 chmod +x setup.sh
 ./setup.sh ghcp-demo-rg
+```
+
+**PowerShell equivalent:**
+
+```powershell
+cd scenarios/04-keyvault-secret-volume
+# If script execution is blocked, allow it for this session:
+# Set-ExecutionPolicy -Scope Process Bypass
+./setup.ps1 -ResourceGroup ghcp-demo-rg
 ```
 
 ### 3. Monitor the Pod
@@ -173,6 +197,15 @@ az deployment group show \
   --query properties.outputs
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+az deployment group show `
+  --resource-group ghcp-demo-rg `
+  --name main `
+  --query properties.outputs
+```
+
 ### 2. Seed a Secret
 
 ```bash
@@ -205,6 +238,13 @@ kubectl apply -f deployment.yaml
 ```bash
 kubectl delete namespace scenario-keyvault
 rm -f deployment-generated.yaml
+```
+
+**PowerShell equivalent:**
+
+```powershell
+kubectl delete namespace scenario-keyvault
+Remove-Item -Force -ErrorAction SilentlyContinue deployment-generated.yaml
 ```
 
 ## Key Takeaways

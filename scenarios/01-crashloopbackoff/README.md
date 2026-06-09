@@ -105,6 +105,30 @@ kubectl create configmap app-config --from-file=application.conf=app.conf -n sce
 #   mountPath: /app/config
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Create a config file
+@"
+debug=true
+database_url=postgresql://localhost/mydb
+"@ | Set-Content -Path app.conf
+
+# Create ConfigMap
+kubectl create configmap app-config --from-file=application.conf=app.conf -n scenario-crashloop
+
+# Modify deployment to mount it:
+# Add to spec.template.spec:
+# volumes:
+# - name: config
+#   configMap:
+#     name: app-config
+# Add to containers[0]:
+# volumeMounts:
+# - name: config
+#   mountPath: /app/config
+```
+
 ### Solution 2: Add Environment Variables
 
 ```yaml

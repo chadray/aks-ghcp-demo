@@ -28,6 +28,32 @@ kubectl get pods -n scenario-crashloop | gh copilot explain
 kubectl logs -n scenario-crashloop <pod-name> --previous | gh copilot explain
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# 1. Clone/navigate to repo
+cd aks-ghcp-demo
+
+# 2. Create Azure Resource Group
+az group create --name ghcp-demo-rg --location eastus
+
+# 3. Deploy AKS Cluster
+az deployment group create `
+  --resource-group ghcp-demo-rg `
+  --template-file infrastructure/main.bicep `
+  --parameters infrastructure/parameters.json
+
+# 4. Get cluster credentials
+az aks get-credentials --resource-group ghcp-demo-rg --name aks-ghcp-demo
+
+# 5. Deploy a scenario
+kubectl apply -f scenarios/01-crashloopbackoff/deployment.yaml
+
+# 6. Troubleshoot with Copilot
+kubectl get pods -n scenario-crashloop | gh copilot explain
+kubectl logs -n scenario-crashloop <pod-name> --previous | gh copilot explain
+```
+
 ## Prerequisites
 
 ### Required Software
@@ -38,6 +64,16 @@ command -v az        # Azure CLI
 command -v kubectl   # Kubernetes CLI
 command -v docker    # Docker (optional, for building images)
 command -v gh        # GitHub CLI
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Check if installed
+Get-Command az      -ErrorAction SilentlyContinue
+Get-Command kubectl -ErrorAction SilentlyContinue
+Get-Command docker  -ErrorAction SilentlyContinue
+Get-Command gh      -ErrorAction SilentlyContinue
 ```
 
 ### Installation Instructions
@@ -112,6 +148,18 @@ az group create \
 az group show --name ghcp-demo-rg
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Create resource group
+az group create `
+  --name ghcp-demo-rg `
+  --location eastus
+
+# Verify
+az group show --name ghcp-demo-rg
+```
+
 ### Step 2: Deploy AKS Infrastructure
 
 ```bash
@@ -138,6 +186,32 @@ az deployment group show \
   --query properties.provisioningState
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Option A: Deploy with defaults
+az deployment group create `
+  --resource-group ghcp-demo-rg `
+  --template-file infrastructure/main.bicep `
+  --parameters infrastructure/parameters.json
+
+# Option B: Deploy with custom parameters
+az deployment group create `
+  --resource-group ghcp-demo-rg `
+  --template-file infrastructure/main.bicep `
+  --parameters `
+    location=eastus `
+    clusterName=my-demo-cluster `
+    nodeCount=3 `
+    vmSize=Standard_D3s_v3
+
+# Monitor deployment (takes ~10-15 minutes)
+az deployment group show `
+  --resource-group ghcp-demo-rg `
+  --name main `
+  --query properties.provisioningState
+```
+
 **Wait for provisioning state to be "Succeeded"**
 
 ### Step 3: Configure kubectl
@@ -147,6 +221,20 @@ az deployment group show \
 az aks get-credentials \
   --resource-group ghcp-demo-rg \
   --name aks-ghcp-demo \
+  --overwrite-existing
+
+# Verify cluster access
+kubectl cluster-info
+kubectl get nodes
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Get AKS cluster credentials
+az aks get-credentials `
+  --resource-group ghcp-demo-rg `
+  --name aks-ghcp-demo `
   --overwrite-existing
 
 # Verify cluster access
@@ -170,6 +258,19 @@ kubectl apply -f scenarios/01-crashloopbackoff/deployment.yaml
 
 # Watch pod status (gives it 20 seconds to crash)
 sleep 5
+kubectl get pods -n scenario-crashloop
+
+# You should see CrashLoopBackOff after a few seconds
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Deploy scenario
+kubectl apply -f scenarios/01-crashloopbackoff/deployment.yaml
+
+# Watch pod status (gives it 20 seconds to crash)
+Start-Sleep -Seconds 5
 kubectl get pods -n scenario-crashloop
 
 # You should see CrashLoopBackOff after a few seconds
@@ -254,6 +355,21 @@ kubectl get pods --all-namespaces
 kubectl get pods --all-namespaces | gh copilot explain
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Deploy all at once
+Get-ChildItem scenarios/*/deployment.yaml | ForEach-Object {
+  kubectl apply -f $_.FullName
+}
+
+# Check all pods
+kubectl get pods --all-namespaces
+
+# Troubleshoot with Copilot
+kubectl get pods --all-namespaces | gh copilot explain
+```
+
 ## Demo Workflow
 
 Use this workflow to demonstrate the troubleshooting process:
@@ -328,6 +444,26 @@ done
 # To: demoacr.azurecr.io/demo/<scenario>:v1.0
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Create Azure Container Registry
+az acr create --resource-group ghcp-demo-rg --name demoacr --sku Basic
+
+# Build images
+Get-ChildItem scenarios -Directory | ForEach-Object {
+  $imageName = $_.Name
+  az acr build `
+    --registry demoacr `
+    --image "demo/${imageName}:v1.0" `
+    $_.FullName
+}
+
+# Update deployment.yaml files to use your registry
+# Change: docker.io/library/python:3.11-slim
+# To: demoacr.azurecr.io/demo/<scenario>:v1.0
+```
+
 ## Monitoring and Debugging
 
 ### Real-time Monitoring
@@ -341,6 +477,12 @@ kubectl logs <pod-name> -n <namespace> -f
 
 # Stream logs matching a pattern
 kubectl logs <pod-name> -n <namespace> -f | grep ERROR
+```
+
+**PowerShell equivalent** (only the `grep` line differs):
+
+```powershell
+kubectl logs <pod-name> -n <namespace> -f | Select-String "ERROR"
 ```
 
 ### Detailed Debugging
@@ -357,6 +499,22 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp' | tail -10
 
 # Execute command inside pod
 kubectl exec <pod-name> -n <namespace> -- env | grep DATABASE
+```
+
+**PowerShell equivalent** (`tail`/`grep` differ):
+
+```powershell
+# Get all resources in a namespace
+kubectl get all -n <namespace>
+
+# Export pod YAML for analysis
+kubectl get pod <pod-name> -n <namespace> -o yaml
+
+# Check recent events
+kubectl get events -n <namespace> --sort-by='.lastTimestamp' | Select-Object -Last 10
+
+# Execute command inside pod
+kubectl exec <pod-name> -n <namespace> -- env | Select-String "DATABASE"
 ```
 
 ## Troubleshooting the Demo Setup
@@ -377,6 +535,22 @@ az group show --name ghcp-demo-rg
 az vm list-usage --location eastus | grep Standard_D
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Check deployment status
+az deployment group show `
+  --resource-group ghcp-demo-rg `
+  --name main `
+  --query "properties.{provisioningState:provisioningState, error:properties.error}"
+
+# Check resource group is created
+az group show --name ghcp-demo-rg
+
+# Check quota
+az vm list-usage --location eastus | Select-String "Standard_D"
+```
+
 ### kubectl Can't Connect
 
 ```bash
@@ -387,6 +561,22 @@ kubectl config current-context
 az aks get-credentials \
   --resource-group ghcp-demo-rg \
   --name aks-ghcp-demo \
+  --overwrite-existing
+
+# Check cluster exists
+az aks list --resource-group ghcp-demo-rg
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Verify credentials are set
+kubectl config current-context
+
+# Try to get credentials again
+az aks get-credentials `
+  --resource-group ghcp-demo-rg `
+  --name aks-ghcp-demo `
   --overwrite-existing
 
 # Check cluster exists
@@ -407,6 +597,23 @@ kubectl describe pod <pod-name> -n <namespace>
 az aks scale \
   --resource-group ghcp-demo-rg \
   --name aks-ghcp-demo \
+  --node-count 3
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Check node availability
+kubectl top nodes
+kubectl get nodes
+
+# Check pod details
+kubectl describe pod <pod-name> -n <namespace>
+
+# Scale cluster if needed
+az aks scale `
+  --resource-group ghcp-demo-rg `
+  --name aks-ghcp-demo `
   --node-count 3
 ```
 
@@ -437,6 +644,22 @@ az group delete --name ghcp-demo-rg --yes --no-wait
 az aks delete \
   --resource-group ghcp-demo-rg \
   --name aks-ghcp-demo \
+  --yes --no-wait
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Delete all scenarios
+kubectl delete namespace scenario-crashloop scenario-imagepull scenario-applogs
+
+# Delete AKS cluster and resources (takes ~15 minutes)
+az group delete --name ghcp-demo-rg --yes --no-wait
+
+# Or just delete the cluster
+az aks delete `
+  --resource-group ghcp-demo-rg `
+  --name aks-ghcp-demo `
   --yes --no-wait
 ```
 

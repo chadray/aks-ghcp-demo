@@ -63,6 +63,19 @@ az deployment group create \
 az aks get-credentials --resource-group my-rg --name aks-ghcp-demo
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+cd infrastructure
+az deployment group create `
+  --resource-group my-rg `
+  --template-file main.bicep `
+  --parameters location=eastus clusterName=aks-ghcp-demo
+
+# Get cluster credentials
+az aks get-credentials --resource-group my-rg --name aks-ghcp-demo
+```
+
 ### 2. Deploy a Scenario
 
 Each scenario can be deployed independently:

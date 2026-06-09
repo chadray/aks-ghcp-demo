@@ -111,6 +111,14 @@ kubectl set image deployment/imagepull-demo \
   -n scenario-imagepull
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+kubectl set image deployment/imagepull-demo `
+  app=docker.io/library/python:3.11-slim `
+  -n scenario-imagepull
+```
+
 ### Solution 2: Check Available Tags
 
 ```bash
@@ -120,6 +128,18 @@ docker search myapp
 # If it's in Azure Container Registry
 az acr repository show-tags \
   --name myregistry \
+  --repository myapp
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# If it's a public image on Docker Hub
+docker search myapp
+
+# If it's in Azure Container Registry
+az acr repository show-tags `
+  --name myregistry `
   --repository myapp
 ```
 
@@ -140,6 +160,19 @@ spec:
   containers:
   - name: app
     image: myregistry.azurecr.io/myapp:v1.0.0
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Create secret for private registry
+kubectl create secret docker-registry regcred `
+  --docker-server=<registry-url> `
+  --docker-username=<username> `
+  --docker-password=<password> `
+  -n scenario-imagepull
+
+# (The 'spec:' YAML fragment above is the same on Windows.)
 ```
 
 ### Solution 4: Use IfNotPresent Pull Policy
@@ -201,6 +234,14 @@ kubectl set image deployment/imagepull-demo \
   -n scenario-imagepull
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+kubectl set image deployment/imagepull-demo `
+  app=docker.io/library/python:3.11-slim `
+  -n scenario-imagepull
+```
+
 Option B: Use Azure Container Registry
 
 ```bash
@@ -210,6 +251,18 @@ az acr build --registry <registry-name> --image myapp:v1.0 .
 # Then update deployment
 kubectl set image deployment/imagepull-demo \
   app=<registry-name>.azurecr.io/myapp:v1.0 \
+  -n scenario-imagepull
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# First push an image to ACR
+az acr build --registry <registry-name> --image myapp:v1.0 .
+
+# Then update deployment
+kubectl set image deployment/imagepull-demo `
+  app=<registry-name>.azurecr.io/myapp:v1.0 `
   -n scenario-imagepull
 ```
 

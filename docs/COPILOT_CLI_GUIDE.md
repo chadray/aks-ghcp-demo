@@ -144,6 +144,19 @@ kubectl logs <pod-name> | grep -i error | gh copilot explain
 kubectl logs <pod-name> | head -50 | gh copilot explain
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# 1. Find errors in logs
+kubectl logs <pod-name> | Select-String -Pattern "error" -CaseSensitive:$false
+
+# 2. Have Copilot explain them
+kubectl logs <pod-name> | Select-String -Pattern "error" -CaseSensitive:$false | gh copilot explain
+
+# 3. Get specific information
+kubectl logs <pod-name> | Select-Object -First 50 | gh copilot explain
+```
+
 ### Workflow 3: Event Investigation
 
 ```bash
@@ -155,6 +168,19 @@ kubectl get events -n my-namespace --sort-by='.lastTimestamp' | gh copilot expla
 
 # 3. Focus on specific event type
 kubectl get events -n my-namespace | grep Warning | gh copilot explain
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# 1. Get recent events
+kubectl get events -n my-namespace --sort-by='.lastTimestamp' | Select-Object -Last 20
+
+# 2. Explain events
+kubectl get events -n my-namespace --sort-by='.lastTimestamp' | gh copilot explain
+
+# 3. Focus on specific event type
+kubectl get events -n my-namespace | Select-String "Warning" | gh copilot explain
 ```
 
 ### Workflow 4: Resource Investigation
@@ -282,6 +308,17 @@ $ gh copilot suggest
   kubectl logs -l app=myapp --tail=50) | gh copilot explain
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Paste both deployment info and logs for full context
+& {
+  kubectl describe deployment myapp
+  "---RECENT LOGS---"
+  kubectl logs -l app=myapp --tail=50
+} | gh copilot explain
+```
+
 ### 2. Save Output for Later Analysis
 
 ```bash
@@ -362,6 +399,18 @@ gh copilot suggest
 alias k="kubectl"
 alias kex="kubectl explain"
 alias klogs="kubectl logs"
+
+# Now: klogs myapp | gh copilot explain
+```
+
+**PowerShell equivalent:**
+
+```powershell
+Set-Alias k     kubectl
+# Aliases can only point at commands, not subcommands. For multi-word
+# shortcuts, define functions instead:
+function kex   { kubectl explain @args }
+function klogs { kubectl logs @args }
 
 # Now: klogs myapp | gh copilot explain
 ```

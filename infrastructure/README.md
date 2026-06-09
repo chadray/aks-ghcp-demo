@@ -17,6 +17,14 @@ az group create \
   --location eastus
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+az group create `
+  --name ghcp-demo-rg `
+  --location eastus
+```
+
 ### 2. Deploy the Cluster
 
 ```bash
@@ -26,12 +34,30 @@ az deployment group create \
   --parameters parameters.json
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+az deployment group create `
+  --resource-group ghcp-demo-rg `
+  --template-file main.bicep `
+  --parameters parameters.json
+```
+
 ### 3. Get Cluster Credentials
 
 ```bash
 az aks get-credentials \
   --resource-group ghcp-demo-rg \
   --name aks-ghcp-demo \
+  --overwrite-existing
+```
+
+**PowerShell equivalent:**
+
+```powershell
+az aks get-credentials `
+  --resource-group ghcp-demo-rg `
+  --name aks-ghcp-demo `
   --overwrite-existing
 ```
 
@@ -77,6 +103,15 @@ az deployment group create \
   --parameters parameters.json
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+az deployment group create `
+  --resource-group ghcp-demo-rg `
+  --template-file main.bicep `
+  --parameters parameters.json
+```
+
 ## Cleanup
 
 To delete the AKS cluster and all resources:
@@ -84,6 +119,14 @@ To delete the AKS cluster and all resources:
 ```bash
 az group delete \
   --name ghcp-demo-rg \
+  --yes --no-wait
+```
+
+**PowerShell equivalent:**
+
+```powershell
+az group delete `
+  --name ghcp-demo-rg `
   --yes --no-wait
 ```
 
@@ -95,6 +138,15 @@ Container Insights is enabled by default. View logs in the Azure Portal or via C
 # View container logs
 az monitor log-analytics query \
   --workspace ghcp-demo-rg_aks-ghcp-demo_law \
+  --analytics-query "ContainerLog | head 10"
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# View container logs
+az monitor log-analytics query `
+  --workspace ghcp-demo-rg_aks-ghcp-demo_law `
   --analytics-query "ContainerLog | head 10"
 ```
 

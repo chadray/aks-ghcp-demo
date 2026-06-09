@@ -30,6 +30,12 @@ kubectl exec <pod> -n <ns> -- /bin/bash                # Shell access
 kubectl top nodes                           # Resource usage
 ```
 
+**PowerShell note:** Replace `grep -i error` with `Select-String -Pattern "error" -CaseSensitive:$false`:
+
+```powershell
+kubectl describe pod <name> -n <ns> | Select-String -Pattern "error" -CaseSensitive:$false
+```
+
 ## Copilot CLI Commands
 
 ```bash
@@ -76,6 +82,23 @@ kubectl create secret docker-registry regcred \
   --docker-password=<pass> -n <ns>
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# 1. Describe to see error
+kubectl describe pod <pod> -n <ns> | gh copilot explain
+
+# 2. Fix incorrect image tag
+kubectl set image deployment/<dep> `
+  <container>=<correct-image>:<tag> -n <ns>
+
+# 3. For private registry
+kubectl create secret docker-registry regcred `
+  --docker-server=<registry> `
+  --docker-username=<user> `
+  --docker-password=<pass> -n <ns>
+```
+
 ### 🟡 Pod Running but Broken
 
 ```bash
@@ -92,6 +115,25 @@ kubectl logs <pod> -n <ns> | grep ERROR | gh copilot explain
 kubectl scale deployment <dep> --replicas=3 -n <ns>
 kubectl set resources deployment/<dep> \
   --requests=cpu=500m,memory=512Mi \
+  --limits=cpu=1000m,memory=1024Mi -n <ns>
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# 1. Check application logs (not pod status!)
+kubectl logs <pod> -n <ns> | gh copilot explain
+
+# 2. Follow logs to see real-time issues
+kubectl logs <pod> -n <ns> -f
+
+# 3. Look for error patterns
+kubectl logs <pod> -n <ns> | Select-String "ERROR" | gh copilot explain
+
+# 4. Scale or increase resources
+kubectl scale deployment <dep> --replicas=3 -n <ns>
+kubectl set resources deployment/<dep> `
+  --requests=cpu=500m,memory=512Mi `
   --limits=cpu=1000m,memory=1024Mi -n <ns>
 ```
 
@@ -158,6 +200,24 @@ alias kctx='kubectl config current-context'
 # klogs <pod-name> | gh copilot explain
 ```
 
+**PowerShell equivalent** (add to `$PROFILE`):
+
+```powershell
+Set-Alias k kubectl
+function kg    { kubectl get @args }
+function kgp   { kubectl get pods @args }
+function kgd   { kubectl get deployment @args }
+function kdp   { kubectl describe pod @args }
+function klogs { kubectl logs @args }
+function kex   { kubectl exec -it @args }
+function kctx  { kubectl config current-context }
+
+# Usage:
+# kgp                           # List pods
+# kdp <pod-name>                # Describe pod
+# klogs <pod-name> | gh copilot explain
+```
+
 ## Status Reference
 
 | Status              | Meaning                    | Action                           |
@@ -195,6 +255,22 @@ kubectl set resources deployment/<dep> \
   --limits=cpu=500m,memory=512Mi -n <ns>
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Current usage
+kubectl top nodes
+kubectl top pods -n <ns>
+
+# Request/Limits
+kubectl describe pod <pod> -n <ns> | Select-String -Pattern "Requests|Limits" -Context 0,3
+
+# Edit if needed
+kubectl set resources deployment/<dep> `
+  --requests=cpu=100m,memory=128Mi `
+  --limits=cpu=500m,memory=512Mi -n <ns>
+```
+
 ## Port Forwarding (Testing)
 
 ```bash
@@ -209,6 +285,23 @@ curl http://localhost:8080/health
 
 # Kill port forward
 kill %1  # or Ctrl+C
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Access pod directly (run as a background job)
+$pf = Start-Job { kubectl port-forward pod/<pod> 8080:8080 -n <ns> }
+
+# Access service
+$pf = Start-Job { kubectl port-forward svc/<svc> 8080:8080 -n <ns> }
+
+# Test the connection
+curl.exe http://localhost:8080/health
+# or: Invoke-RestMethod http://localhost:8080/health
+
+# Kill port forward
+Stop-Job $pf; Remove-Job $pf
 ```
 
 ## Rollback Deployment
@@ -251,6 +344,22 @@ kubectl get events -n <ns> -w
 
 # Monitor resources in real-time
 watch 'kubectl top pods -n <ns>'
+```
+
+**PowerShell equivalent** (`watch` doesn't exist on Windows; use a loop or `kubectl ... -w`):
+
+```powershell
+# Watch pod startup
+while ($true) { Clear-Host; kubectl get pods -n <ns>; Start-Sleep -Seconds 1 }
+
+# Follow multiple logs
+kubectl logs -n <ns> -f -l app=<label> --all-containers
+
+# Stream all events
+kubectl get events -n <ns> -w
+
+# Monitor resources in real-time
+while ($true) { Clear-Host; kubectl top pods -n <ns>; Start-Sleep -Seconds 2 }
 ```
 
 ## Useful Flags
@@ -309,6 +418,24 @@ kubectl rollout restart deployment/<dep> -n <ns>
 # Scale to 0 then back up (hard restart)
 kubectl scale deployment/<dep> --replicas=0 -n <ns>
 sleep 2
+kubectl scale deployment/<dep> --replicas=3 -n <ns>
+```
+
+**PowerShell equivalent** (only `sleep` differs):
+
+```powershell
+# Delete pod (will be recreated by deployment)
+kubectl delete pod <pod> -n <ns>
+
+# Delete pod immediately
+kubectl delete pod <pod> -n <ns> --force --grace-period=0
+
+# Restart deployment
+kubectl rollout restart deployment/<dep> -n <ns>
+
+# Scale to 0 then back up (hard restart)
+kubectl scale deployment/<dep> --replicas=0 -n <ns>
+Start-Sleep -Seconds 2
 kubectl scale deployment/<dep> --replicas=3 -n <ns>
 ```
 

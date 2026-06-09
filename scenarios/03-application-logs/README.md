@@ -69,6 +69,19 @@ kubectl port-forward -n scenario-applogs svc/applogs-demo 8080:8080 &
 curl http://localhost:8080/api/data
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Port forward to the application (run in background as a job)
+$pf = Start-Job { kubectl port-forward -n scenario-applogs svc/applogs-demo 8080:8080 }
+
+# Make a request
+curl.exe http://localhost:8080/api/data
+# or: Invoke-RestMethod http://localhost:8080/api/data
+
+# When done: Stop-Job $pf; Remove-Job $pf
+```
+
 You'll see errors intermittently.
 
 ### Step 3: Check Logs (This is where the issue is!)
@@ -151,6 +164,13 @@ kubectl scale deployment applogs-demo --replicas=3 -n scenario-applogs
 kubectl logs -n scenario-applogs <pod-name> | grep ERROR | wc -l
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Export metrics to monitoring system
+(kubectl logs -n scenario-applogs <pod-name> | Select-String "ERROR").Count
+```
+
 ## Try It Yourself
 
 ### 1. Deploy the Scenario
@@ -184,6 +204,16 @@ for i in {1..20}; do
   echo ""
   sleep 0.5
 done
+```
+
+**PowerShell equivalent:**
+
+```powershell
+1..20 | ForEach-Object {
+  try { curl.exe http://localhost:8080/api/data 2>$null } catch {}
+  Write-Host ""
+  Start-Sleep -Milliseconds 500
+}
 ```
 
 ### 4. Read the Application Logs
@@ -224,6 +254,20 @@ cat app-logs.txt | gh copilot explain
 kubectl logs -n scenario-applogs <pod-name> | grep ERROR | gh copilot explain
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Pipe logs directly to Copilot
+kubectl logs -n scenario-applogs <pod-name> | gh copilot explain
+
+# Or save and analyze
+kubectl logs -n scenario-applogs <pod-name> > app-logs.txt
+Get-Content app-logs.txt | gh copilot explain
+
+# Get specific error patterns
+kubectl logs -n scenario-applogs <pod-name> | Select-String "ERROR" | gh copilot explain
+```
+
 ### 6. Check Error Rate
 
 ```bash
@@ -234,6 +278,19 @@ kubectl logs -n scenario-applogs <pod-name> | grep -c ERROR
 total=$(kubectl logs -n scenario-applogs <pod-name> | grep -c "Processing request")
 errors=$(kubectl logs -n scenario-applogs <pod-name> | grep -c ERROR)
 echo "Error rate: $(echo "scale=2; $errors * 100 / $total" | bc)%"
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Count errors in logs
+(kubectl logs -n scenario-applogs <pod-name> | Select-String "ERROR").Count
+
+# Get error percentage
+$total  = (kubectl logs -n scenario-applogs <pod-name> | Select-String "Processing request").Count
+$errors = (kubectl logs -n scenario-applogs <pod-name> | Select-String "ERROR").Count
+$rate   = if ($total -gt 0) { [math]::Round($errors * 100 / $total, 2) } else { 0 }
+Write-Host "Error rate: $rate%"
 ```
 
 ### 7. Implement Fix
@@ -251,6 +308,19 @@ kubectl set resources deployment applogs-demo \
   -n scenario-applogs
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Increase replicas to distribute load
+kubectl scale deployment applogs-demo --replicas=3 -n scenario-applogs
+
+# Update with more resources
+kubectl set resources deployment applogs-demo `
+  --requests=cpu=200m,memory=256Mi `
+  --limits=cpu=400m,memory=512Mi `
+  -n scenario-applogs
+```
+
 ### 8. Verify Fix
 
 ```bash
@@ -259,6 +329,16 @@ kubectl logs -n scenario-applogs <pod-name> -f | grep -E "(ERROR|SUCCESS)"
 
 # Check if error rate decreased
 kubectl logs -n scenario-applogs <pod-name> --since=5m | grep ERROR | wc -l
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Monitor the logs for errors
+kubectl logs -n scenario-applogs <pod-name> -f | Select-String "ERROR|SUCCESS"
+
+# Check if error rate decreased
+(kubectl logs -n scenario-applogs <pod-name> --since=5m | Select-String "ERROR").Count
 ```
 
 ## Cleanup

@@ -99,6 +99,23 @@ kubectl set volume deployment/<dep> --add --name=config \
 kubectl edit deployment <dep> -n <namespace>
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Read logs to identify the error
+kubectl logs <pod-name> -n <namespace> --previous | Select-Object -First 20
+
+# Create missing ConfigMap or Secret
+kubectl create configmap <name> --from-file=<file> -n <namespace>
+
+# Update deployment with volumes
+kubectl set volume deployment/<dep> --add --name=config `
+  --type=configmap --configmap-name=<name> --mount-path=/etc/config
+
+# Or directly edit deployment
+kubectl edit deployment <dep> -n <namespace>
+```
+
 ### Issue 2: Pod Can't Pull Image (ImagePullBackOff)
 
 **Symptom**: Pod stuck in `ImagePullBackOff`
@@ -143,6 +160,32 @@ kubectl set image deployment/<dep> \
   -n <namespace>
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Check if image exists (Docker Hub)
+docker search <image-name>
+
+# Check Azure Container Registry
+az acr repository show-tags --registry <registry> --repository <image>
+
+# Add image pull secret for private registry
+kubectl create secret docker-registry regcred `
+  --docker-server=<registry-url> `
+  --docker-username=<user> `
+  --docker-password=<password> `
+  -n <namespace>
+
+# Update deployment to use secret
+# (Inner JSON quotes need escaping in PowerShell; using single quotes keeps it literal.)
+kubectl patch serviceaccount default -p '{"imagePullSecrets": [{"name": "regcred"}]}' -n <namespace>
+
+# Or fix the image name directly
+kubectl set image deployment/<dep> `
+  <container>=<correct-image>:<tag> `
+  -n <namespace>
+```
+
 ### Issue 3: Pod Running But Broken (Application Errors)
 
 **Symptom**: Pod shows `Running` but not responding correctly
@@ -159,6 +202,12 @@ kubectl logs <pod-name> -n <namespace> -f | gh copilot explain
 
 # Step 4: Look for error patterns
 kubectl logs <pod-name> -n <namespace> | grep ERROR | gh copilot explain
+```
+
+**PowerShell equivalent** (only the `grep` line differs):
+
+```powershell
+kubectl logs <pod-name> -n <namespace> | Select-String "ERROR" | gh copilot explain
 ```
 
 **Common causes**:
@@ -190,6 +239,27 @@ kubectl set env deployment/<dep> \
 kubectl scale deployment <dep> --replicas=3 -n <namespace>
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Increase resources
+kubectl set resources deployment/<dep> `
+  --requests=cpu=500m,memory=512Mi `
+  --limits=cpu=1000m,memory=1024Mi `
+  -n <namespace>
+
+# Check environment variables
+kubectl set env deployment/<dep> --list -n <namespace>
+
+# Update environment variable
+kubectl set env deployment/<dep> `
+  DATABASE_URL=postgresql://host:5432/db `
+  -n <namespace>
+
+# Scale up replicas
+kubectl scale deployment <dep> --replicas=3 -n <namespace>
+```
+
 ### Issue 4: Pod Pending
 
 **Symptom**: Pod stuck in `Pending` state
@@ -203,6 +273,12 @@ kubectl get events -n <namespace> | grep <pod-name> | gh copilot explain
 
 # Step 3: Check node capacity
 kubectl top nodes | gh copilot explain
+```
+
+**PowerShell equivalent** (only the `grep` line differs):
+
+```powershell
+kubectl get events -n <namespace> | Select-String "<pod-name>" | gh copilot explain
 ```
 
 **Common causes**:
@@ -221,6 +297,26 @@ kubectl describe node <node-name>
 
 # Remove node selectors
 kubectl patch deployment <dep> --type json -p='[{"op": "remove", "path": "/spec/template/spec/nodeSelector"}]' -n <namespace>
+
+# Scale cluster
+az aks scale --resource-group <rg> --name <cluster> --node-count 3
+
+# Check PVC status
+kubectl get pvc -n <namespace>
+kubectl describe pvc <pvc-name> -n <namespace>
+```
+
+**PowerShell equivalent** (the JSON patch needs quoting tweaks):
+
+```powershell
+# Check node availability
+kubectl get nodes
+kubectl describe node <node-name>
+
+# Remove node selectors (use double quotes around JSON in PowerShell)
+kubectl patch deployment <dep> --type json `
+  -p '[{\"op\": \"remove\", \"path\": \"/spec/template/spec/nodeSelector\"}]' `
+  -n <namespace>
 
 # Scale cluster
 az aks scale --resource-group <rg> --name <cluster> --node-count 3
@@ -256,6 +352,12 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp' | tail -20 | gh cop
 
 # Manually trigger rollout
 kubectl rollout restart deployment/<dep> -n <namespace>
+```
+
+**PowerShell equivalent** (only the `tail` line differs):
+
+```powershell
+kubectl get events -n <namespace> --sort-by='.lastTimestamp' | Select-Object -Last 20 | gh copilot explain
 ```
 
 ## Node Issues
@@ -340,6 +442,12 @@ kubectl top pods -n <namespace>
 kubectl describe deployment <dep> -n <namespace> | grep -A 5 "Limits\|Requests"
 ```
 
+**PowerShell equivalent** (only the `grep` line differs):
+
+```powershell
+kubectl describe deployment <dep> -n <namespace> | Select-String -Pattern "Limits|Requests" -Context 0,5
+```
+
 **Fix approach**:
 
 ```bash
@@ -347,6 +455,22 @@ kubectl describe deployment <dep> -n <namespace> | grep -A 5 "Limits\|Requests"
 kubectl set resources deployment/<dep> \
   --requests=cpu=250m,memory=256Mi \
   --limits=cpu=500m,memory=512Mi \
+  -n <namespace>
+
+# Scale cluster
+az aks scale --resource-group <rg> --name <cluster> --node-count 5
+
+# Scale individual deployments
+kubectl autoscale deployment <dep> --min=2 --max=10 -n <namespace>
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Update resource requests
+kubectl set resources deployment/<dep> `
+  --requests=cpu=250m,memory=256Mi `
+  --limits=cpu=500m,memory=512Mi `
   -n <namespace>
 
 # Scale cluster
@@ -380,6 +504,19 @@ kubectl logs <pod-name> | grep ERROR | gh copilot explain
 kubectl logs <pod-name> && kubectl describe pod <pod-name> | gh copilot explain
 ```
 
+**PowerShell equivalent:**
+
+```powershell
+# Explain logs from a pod
+kubectl logs <pod-name> | gh copilot explain
+
+# Explain specific error messages
+kubectl logs <pod-name> | Select-String "ERROR" | gh copilot explain
+
+# Explain multiple resources (PowerShell uses ; or chained if-success blocks)
+kubectl logs <pod-name>; if ($LASTEXITCODE -eq 0) { kubectl describe pod <pod-name> | gh copilot explain }
+```
+
 ### 3. Get Suggestions
 
 ```bash
@@ -406,6 +543,17 @@ cat pod-info.txt | gh copilot explain
 ```bash
 # Combine deployment info and logs
 (kubectl describe deployment <dep>; echo "---LOGS---"; kubectl logs -l app=<app>) | gh copilot explain
+```
+
+**PowerShell equivalent:**
+
+```powershell
+# Combine deployment info and logs
+& {
+  kubectl describe deployment <dep>
+  "---LOGS---"
+  kubectl logs -l app=<app>
+} | gh copilot explain
 ```
 
 ## Quick Reference
@@ -478,6 +626,17 @@ alias klogs="kubectl logs"
 # Now: k get pods | gh copilot explain
 ```
 
+**PowerShell equivalent** (add to `$PROFILE`):
+
+```powershell
+Set-Alias k kubectl
+function kgp   { kubectl get pods @args }
+function kdp   { kubectl describe pod @args }
+function klogs { kubectl logs @args }
+
+# Now: k get pods | gh copilot explain
+```
+
 ### Save Time with Labels
 
 ```bash
@@ -509,6 +668,12 @@ kubectl rollout status deployment/<name>
 
 # Follow logs
 kubectl logs <pod> -f | grep -E "ERROR|WARN"
+```
+
+**PowerShell equivalent** (only the `grep -E` line differs):
+
+```powershell
+kubectl logs <pod> -f | Select-String "ERROR|WARN"
 ```
 
 ## Additional Resources
