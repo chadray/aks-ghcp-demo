@@ -7,7 +7,7 @@ This repository demonstrates how support teams can use **GitHub Copilot CLI** to
 This demo includes:
 
 1. **AKS Infrastructure** - A complete, ready-to-deploy AKS cluster setup using Bicep
-2. **Three Failure Scenarios** - Real-world Kubernetes failure patterns that support teams commonly encounter
+2. **Four Failure Scenarios** - Real-world Kubernetes failure patterns that support teams commonly encounter
 3. **Complete Documentation** - Step-by-step guides for each scenario and troubleshooting approach
 
 ## Scenarios Included
