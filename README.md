@@ -48,7 +48,7 @@ This demo includes:
 - Helm installed (for cluster deployment)
 - kubectl installed
 - Docker installed (for building container images)
-- GitHub Copilot CLI installed (`gh copilot`)
+- GitHub Copilot CLI installed (`copilot` — the standalone GitHub Copilot CLI)
 
 > **Tip — Automated Setup:** A PowerShell script is provided in the [`Utilities/`](Utilities/) folder that can install or update all of the prerequisites listed above using `winget`. Run it in an elevated PowerShell window:
 >
@@ -157,20 +157,39 @@ and `ACR_LOGIN_SERVER`.
 
 ### 3. Use GitHub Copilot CLI to Troubleshoot
 
-Once a pod is in a failed state, run `kubectl` and pipe the output into the
-GitHub Copilot CLI (`copilot`), asking it to explain the output in plain English
-and troubleshoot the errors:
+Once a pod is in a failed state, hand the `kubectl` output to the GitHub Copilot
+CLI (`copilot`) and ask it to explain the output in plain English and
+troubleshoot the errors.
+
+> **Important — don't pipe into Copilot.** The GitHub Copilot CLI does **not**
+> read piped `stdin` as context. `kubectl ... | copilot -p "..."` gives Copilot an
+> empty prompt and it replies that there's no data. Instead, embed the command's
+> output **inline** in the prompt using shell command substitution `$(...)` so the
+> text becomes part of the `-p` argument.
 
 ```bash
+# Capture the pod name once
+POD=$(kubectl get pods -n scenario-1 -o jsonpath='{.items[0].metadata.name}')
+
 # Get pod details
-kubectl describe pod <pod-name> -n scenario-1 | copilot -p "Explain these pod events in plain English and how to troubleshoot the errors"
+copilot -p "Explain these pod events in plain English and how to troubleshoot the errors:
+
+$(kubectl describe pod "$POD" -n scenario-1)"
 
 # View logs
-kubectl logs <pod-name> -n scenario-1 | copilot -p "Explain these logs in plain English and how to fix the errors"
+copilot -p "Explain these logs in plain English and how to fix the errors:
+
+$(kubectl logs "$POD" -n scenario-1)"
 
 # Get events
-kubectl get events -n scenario-1 | copilot -p "Explain these Kubernetes events in plain English and how to fix them"
+copilot -p "Explain these Kubernetes events in plain English and how to fix them:
+
+$(kubectl get events -n scenario-1)"
 ```
+
+> **Tip:** Because this `copilot` is agentic, you can also let it run the commands
+> itself — add `--allow-all-tools` and just describe the task:
+> `copilot --allow-all-tools -p "Investigate the failing pod in namespace scenario-1 with kubectl, explain the root cause in plain English, and tell me how to fix it."`
 
 ## Folder Structure
 
@@ -226,26 +245,46 @@ aks-ghcp-demo/
 
 ## Copilot CLI Commands Reference
 
-The core pattern is to pipe any `kubectl` output into `copilot -p "<your prompt>"`
-and ask it to explain the output in plain English and troubleshoot the errors.
+The core pattern is to embed `kubectl` output **inline** in the prompt with
+command substitution — `copilot -p "<your prompt>:\n\n$(kubectl ...)"` — and ask
+it to explain the output in plain English and troubleshoot the errors.
+
+> Do **not** pipe (`kubectl ... | copilot`); the CLI ignores piped `stdin`. Use
+> `$(...)` so the output is part of the `-p` prompt text.
 
 ### Explain Kubernetes Resources
 
 ```bash
-kubectl get pods -n namespace | copilot -p "Explain this pod status in plain English and tell me what is wrong"
-kubectl describe deployment my-app -n namespace | copilot -p "Explain this deployment in plain English and how to troubleshoot any issues"
+copilot -p "Explain this pod status in plain English and tell me what is wrong:
+
+$(kubectl get pods -n namespace)"
+
+copilot -p "Explain this deployment in plain English and how to troubleshoot any issues:
+
+$(kubectl describe deployment my-app -n namespace)"
 ```
 
 ### Explain Logs
 
 ```bash
-kubectl logs pod-name -n namespace | copilot -p "Explain these logs in plain English and how to fix the errors"
+copilot -p "Explain these logs in plain English and how to fix the errors:
+
+$(kubectl logs pod-name -n namespace)"
 ```
 
 ### Explain Events
 
 ```bash
-kubectl get events -n namespace | copilot -p "Explain these Kubernetes events in plain English and how to fix them"
+copilot -p "Explain these Kubernetes events in plain English and how to fix them:
+
+$(kubectl get events -n namespace)"
+```
+
+### Let Copilot Run the Commands (agentic)
+
+```bash
+# Grant tool access and describe the task; Copilot runs kubectl itself
+copilot --allow-all-tools -p "Investigate the failing pod in namespace <namespace>, explain the root cause in plain English, and tell me how to fix it."
 ```
 
 ### Interactive Prompts
