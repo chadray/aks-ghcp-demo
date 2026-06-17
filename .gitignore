@@ -1,0 +1,4 @@
+
+# Generated at runtime by scenario 04 setup scripts
+scenarios/04-keyvault-secret-volume/deployment-generated.yaml
+.DS_Store
