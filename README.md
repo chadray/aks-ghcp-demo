@@ -100,17 +100,19 @@ kubectl get pods -n scenario-1
 
 ### 3. Use GitHub Copilot CLI to Troubleshoot
 
-Once a pod is in a failed state, use Copilot to help diagnose:
+Once a pod is in a failed state, run `kubectl` and pipe the output into the
+GitHub Copilot CLI (`copilot`), asking it to explain the output in plain English
+and troubleshoot the errors:
 
 ```bash
 # Get pod details
-kubectl describe pod <pod-name> -n scenario-1 | gh copilot explain
+kubectl describe pod <pod-name> -n scenario-1 | copilot -p "Explain these pod events in plain English and how to troubleshoot the errors"
 
 # View logs
-kubectl logs <pod-name> -n scenario-1 | gh copilot explain
+kubectl logs <pod-name> -n scenario-1 | copilot -p "Explain these logs in plain English and how to fix the errors"
 
 # Get events
-kubectl get events -n scenario-1 | gh copilot explain
+kubectl get events -n scenario-1 | copilot -p "Explain these Kubernetes events in plain English and how to fix them"
 ```
 
 ## Folder Structure
@@ -165,30 +167,32 @@ aks-ghcp-demo/
 
 ## Copilot CLI Commands Reference
 
+The core pattern is to pipe any `kubectl` output into `copilot -p "<your prompt>"`
+and ask it to explain the output in plain English and troubleshoot the errors.
+
 ### Explain Kubernetes Resources
 
 ```bash
-kubectl get pods -n namespace | gh copilot explain
-kubectl describe deployment my-app -n namespace | gh copilot explain
+kubectl get pods -n namespace | copilot -p "Explain this pod status in plain English and tell me what is wrong"
+kubectl describe deployment my-app -n namespace | copilot -p "Explain this deployment in plain English and how to troubleshoot any issues"
 ```
 
 ### Explain Logs
 
 ```bash
-kubectl logs pod-name -n namespace | gh copilot explain
+kubectl logs pod-name -n namespace | copilot -p "Explain these logs in plain English and how to fix the errors"
 ```
 
 ### Explain Events
 
 ```bash
-kubectl get events -n namespace | gh copilot explain
+kubectl get events -n namespace | copilot -p "Explain these Kubernetes events in plain English and how to fix them"
 ```
 
 ### Interactive Prompts
 
 ```bash
-gh copilot explain   # Interactive mode
-gh copilot suggest   # Get suggestions for next steps
+copilot   # Open an interactive Copilot session to paste output and ask questions
 ```
 
 ## Building Container Images
@@ -207,7 +211,7 @@ Update the `deployment.yaml` image reference as needed.
 
 - Review each scenario's README for detailed information
 - Follow the TROUBLESHOOTING_GUIDE.md for diagnostic procedures
-- Experiment with different `gh copilot` commands
+- Experiment with different `copilot` prompts for explaining and troubleshooting output
 - Extend scenarios with your own failure patterns
 
 ## Support

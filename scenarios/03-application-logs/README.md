@@ -49,12 +49,12 @@ applogs-demo-5a8b3c2-def45        50m     45Mi
 
 ## Diagnosing with Copilot CLI
 
-This scenario showcases where Copilot CLI truly adds value - parsing complex logs and identifying patterns.
+This scenario showcases where Copilot CLI truly adds value - parsing complex logs and identifying patterns. The workflow is to run `kubectl` and pipe the output into the GitHub Copilot CLI (`copilot`), asking it to explain the output in plain English and troubleshoot the errors.
 
 ### Step 1: Get Pod Status (Looks Good)
 
 ```bash
-kubectl get pods -n scenario-applogs | gh copilot explain
+kubectl get pods -n scenario-applogs | copilot -p "Explain this pod status in plain English and tell me if anything is wrong"
 ```
 
 Output will show the pod is running - no obvious problems.
@@ -87,7 +87,7 @@ You'll see errors intermittently.
 ### Step 3: Check Logs (This is where the issue is!)
 
 ```bash
-kubectl logs -n scenario-applogs <pod-name> | gh copilot explain
+kubectl logs -n scenario-applogs <pod-name> | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
 ```
 
 Copilot will parse the logs and identify:
@@ -100,17 +100,17 @@ Copilot will parse the logs and identify:
 
 ```bash
 # Get the last 50 lines of logs
-kubectl logs -n scenario-applogs <pod-name> --tail=50 | gh copilot explain
+kubectl logs -n scenario-applogs <pod-name> --tail=50 | copilot -p "Explain these logs in plain English and how to fix the errors"
 
 # Stream logs in real-time and explain
-kubectl logs -n scenario-applogs <pod-name> -f | gh copilot explain
+kubectl logs -n scenario-applogs <pod-name> -f | copilot -p "Explain these logs in plain English and how to fix the errors"
 ```
 
 ### Step 5: Interactive Analysis
 
 ```bash
-# Use interactive mode with Copilot
-gh copilot explain
+# Open an interactive Copilot session
+copilot
 
 # Paste log output or kubectl command results
 # Ask specific questions about error patterns
@@ -244,28 +244,28 @@ You'll see output like:
 
 ```bash
 # Pipe logs directly to Copilot
-kubectl logs -n scenario-applogs <pod-name> | gh copilot explain
+kubectl logs -n scenario-applogs <pod-name> | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
 
 # Or save and analyze
 kubectl logs -n scenario-applogs <pod-name> > app-logs.txt
-cat app-logs.txt | gh copilot explain
+cat app-logs.txt | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
 
 # Get specific error patterns
-kubectl logs -n scenario-applogs <pod-name> | grep ERROR | gh copilot explain
+kubectl logs -n scenario-applogs <pod-name> | grep ERROR | copilot -p "Explain these errors in plain English and how to fix them"
 ```
 
 **PowerShell equivalent:**
 
 ```powershell
 # Pipe logs directly to Copilot
-kubectl logs -n scenario-applogs <pod-name> | gh copilot explain
+kubectl logs -n scenario-applogs <pod-name> | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
 
 # Or save and analyze
 kubectl logs -n scenario-applogs <pod-name> > app-logs.txt
-Get-Content app-logs.txt | gh copilot explain
+Get-Content app-logs.txt | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
 
 # Get specific error patterns
-kubectl logs -n scenario-applogs <pod-name> | Select-String "ERROR" | gh copilot explain
+kubectl logs -n scenario-applogs <pod-name> | Select-String "ERROR" | copilot -p "Explain these errors in plain English and how to fix them"
 ```
 
 ### 6. Check Error Rate
@@ -365,11 +365,11 @@ Save logs to a file for deeper analysis:
 # Get all logs since pod start
 kubectl logs -n scenario-applogs <pod-name> > pod-logs.txt
 
-# Ask Copilot specific questions
-echo "What is causing the database errors?" | gh copilot explain pod-logs.txt
+# Ask Copilot specific questions about the saved logs
+cat pod-logs.txt | copilot -p "What is causing the database errors in these logs? Explain in plain English and how to fix it"
 
-# Or use as context for troubleshooting
-cat pod-logs.txt | gh copilot suggest
+# Or have it suggest next troubleshooting steps
+cat pod-logs.txt | copilot -p "Based on these logs, what should I do next to troubleshoot and fix the errors?"
 ```
 
 Copilot will help you:

@@ -40,10 +40,14 @@ crashloop-demo-7f8d4c9b2-abc12   0/1     CrashLoopBackOff   5          2m30s
 
 ## Diagnosing with Copilot CLI
 
+The pattern is the same for every command: run `kubectl`, then pipe the output
+into the GitHub Copilot CLI (`copilot`) with a prompt asking it to explain the
+output in plain English and troubleshoot the errors.
+
 ### Step 1: Get Pod Status
 
 ```bash
-kubectl get pods -n scenario-crashloop | gh copilot explain
+kubectl get pods -n scenario-crashloop | copilot -p "Explain this pod status in plain English and tell me what is wrong"
 ```
 
 Copilot will explain that the pod is in CrashLoopBackOff state and restarting repeatedly.
@@ -51,7 +55,7 @@ Copilot will explain that the pod is in CrashLoopBackOff state and restarting re
 ### Step 2: Describe the Pod
 
 ```bash
-kubectl describe pod <pod-name> -n scenario-crashloop | gh copilot explain
+kubectl describe pod <pod-name> -n scenario-crashloop | copilot -p "Explain these pod events in plain English and how to troubleshoot the errors"
 ```
 
 Look for the "Events" section showing container restarts and error conditions.
@@ -59,7 +63,7 @@ Look for the "Events" section showing container restarts and error conditions.
 ### Step 3: Check Pod Logs
 
 ```bash
-kubectl logs <pod-name> -n scenario-crashloop | gh copilot explain
+kubectl logs <pod-name> -n scenario-crashloop | copilot -p "Explain these logs in plain English and how to fix the errors"
 ```
 
 This will show the error message:
@@ -193,11 +197,11 @@ kubectl describe pod -n scenario-crashloop crashloop-demo-7f8d4c9b2-abc12
 ### 5. Use Copilot to Explain
 
 ```bash
-# Pipe any kubectl output to Copilot
-kubectl logs -n scenario-crashloop crashloop-demo-7f8d4c9b2-abc12 | gh copilot explain
+# Pipe the logs into Copilot and ask it to explain and troubleshoot
+kubectl logs -n scenario-crashloop crashloop-demo-7f8d4c9b2-abc12 | copilot -p "Explain these logs in plain English and how to fix the errors"
 
-# Or explain events
-kubectl get events -n scenario-crashloop | gh copilot explain
+# Or pipe the events in the same way
+kubectl get events -n scenario-crashloop | copilot -p "Explain these Kubernetes events in plain English and how to troubleshoot them"
 ```
 
 ## Cleanup
@@ -211,5 +215,5 @@ kubectl delete namespace scenario-crashloop
 - **CrashLoopBackOff** means the container keeps exiting immediately
 - Always check pod logs with `--previous` flag to see logs from crashed container
 - Most often caused by configuration, environment, or permission issues
-- Copilot CLI can help parse logs and identify patterns in error messages
+- Piping kubectl output into `copilot` turns raw logs into a plain-English explanation with suggested fixes
 - Event descriptions provide insight into why restarts are happening

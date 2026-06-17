@@ -40,10 +40,14 @@ imagepull-demo-5a8b3c2-def45      0/1     ImagePullBackOff   0          2m
 
 ## Diagnosing with Copilot CLI
 
+The pattern is the same for every command: run `kubectl`, then pipe the output
+into the GitHub Copilot CLI (`copilot`) with a prompt asking it to explain the
+output in plain English and troubleshoot the errors.
+
 ### Step 1: Get Pod Status
 
 ```bash
-kubectl get pods -n scenario-imagepull | gh copilot explain
+kubectl get pods -n scenario-imagepull | copilot -p "Explain this pod status in plain English and tell me what is wrong"
 ```
 
 Copilot will explain that the pod cannot pull its image.
@@ -51,7 +55,7 @@ Copilot will explain that the pod cannot pull its image.
 ### Step 2: Describe the Pod
 
 ```bash
-kubectl describe pod <pod-name> -n scenario-imagepull | gh copilot explain
+kubectl describe pod <pod-name> -n scenario-imagepull | copilot -p "Explain these pod events in plain English and how to troubleshoot the errors"
 ```
 
 Look for the "Events" section showing image pull errors. You'll see messages like:
@@ -63,10 +67,10 @@ failed to resolve reference "docker.io/mycompany/myapp:v99.99.99":
 manifest not found
 ```
 
-Pass this to Copilot to get explanations:
+Pass this to Copilot to get a plain-English explanation:
 
 ```bash
-kubectl describe pod <pod-name> -n scenario-imagepull | gh copilot explain
+kubectl describe pod <pod-name> -n scenario-imagepull | copilot -p "Explain these pod events in plain English and how to fix the image pull error"
 ```
 
 Copilot will identify the image pull failure as the root cause.
@@ -217,11 +221,11 @@ kubectl describe pod -n scenario-imagepull <pod-name>
 ### 4. Use Copilot to Analyze
 
 ```bash
-# Get the events and explain them
-kubectl describe pod -n scenario-imagepull <pod-name> | gh copilot explain
+# Get the events and have Copilot explain and troubleshoot them
+kubectl describe pod -n scenario-imagepull <pod-name> | copilot -p "Explain these pod events in plain English and how to fix the errors"
 
 # Or extract just the error message
-kubectl describe pod -n scenario-imagepull <pod-name> | grep "Failed to pull" | gh copilot explain
+kubectl describe pod -n scenario-imagepull <pod-name> | grep "Failed to pull" | copilot -p "Explain this error in plain English and how to fix it"
 ```
 
 ### 5. Fix It

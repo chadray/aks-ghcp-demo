@@ -131,17 +131,20 @@ Looking for secret at: /mnt/secrets/demo-secret
 
 ## Diagnosing Issues with Copilot CLI
 
+Run `kubectl`, then pipe the output into the GitHub Copilot CLI (`copilot`) with a
+prompt asking it to explain the output in plain English and troubleshoot the errors.
+
 ### The Pod Won't Start
 
 ```bash
 # Check pod status
-kubectl get pods -n scenario-keyvault | gh copilot explain
+kubectl get pods -n scenario-keyvault | copilot -p "Explain this pod status in plain English and tell me what is wrong"
 
 # Describe the pod for events
-kubectl describe pod -n scenario-keyvault -l app=keyvault-demo | gh copilot explain
+kubectl describe pod -n scenario-keyvault -l app=keyvault-demo | copilot -p "Explain these pod events in plain English and how to troubleshoot the errors"
 
 # Check CSI driver events
-kubectl get events -n scenario-keyvault --sort-by='.lastTimestamp' | gh copilot explain
+kubectl get events -n scenario-keyvault --sort-by='.lastTimestamp' | copilot -p "Explain these Kubernetes events in plain English and how to fix the errors"
 ```
 
 ### Common Failure Modes
