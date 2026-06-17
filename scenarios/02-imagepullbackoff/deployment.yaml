@@ -25,8 +25,15 @@ spec:
     spec:
       containers:
       - name: app
-        # This image doesn't exist - it will trigger ImagePullBackOff
-        image: docker.io/mycompany/myapp:v99.99.99
+        # The image repository exists in ACR, but the ":latest" tag was never
+        # pushed (only ":v1" exists). AKS can authenticate to the attached
+        # registry, but the manifest for ":latest" is not found, so the pull
+        # fails with ImagePullBackOff ("manifest unknown").
+        #
+        # >>> THE BUG: wrong/nonexistent image tag. <<<
+        # To FIX, point this at a tag that actually exists, e.g.:
+        #   image: ghcpdemoacr.azurecr.io/imagepull-demo:v1
+        image: ghcpdemoacr.azurecr.io/imagepull-demo:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

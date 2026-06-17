@@ -47,73 +47,135 @@ applogs-demo-5a8b3c2-def45        50m     45Mi
 
 **You must read logs to find the problem!**
 
-## Diagnosing with Copilot CLI
+## Part A — Diagnose It Manually
 
-This scenario showcases where Copilot CLI truly adds value - parsing complex logs and identifying patterns. The workflow is to run `kubectl` and pipe the output into the GitHub Copilot CLI (`copilot`), asking it to explain the output in plain English and troubleshoot the errors.
+This is the "old school" workflow: run `kubectl` yourself and read the output.
+The catch with this scenario is that **pod status tells you nothing is wrong** —
+you have to go into the logs.
 
-### Step 1: Get Pod Status (Looks Good)
-
-```bash
-kubectl get pods -n scenario-applogs | copilot -p "Explain this pod status in plain English and tell me if anything is wrong"
-```
-
-Output will show the pod is running - no obvious problems.
-
-### Step 2: Test the Application
+### Step 1: Check Pod Status (Looks Healthy)
 
 ```bash
-# Port forward to the application
-kubectl port-forward -n scenario-applogs svc/applogs-demo 8080:8080 &
-
-# Make a request
-curl http://localhost:8080/api/data
+kubectl get pods -n scenario-applogs
 ```
 
-**PowerShell equivalent:**
-
-```powershell
-# Port forward to the application (run in background as a job)
-$pf = Start-Job { kubectl port-forward -n scenario-applogs svc/applogs-demo 8080:8080 }
-
-# Make a request
-curl.exe http://localhost:8080/api/data
-# or: Invoke-RestMethod http://localhost:8080/api/data
-
-# When done: Stop-Job $pf; Remove-Job $pf
+```
+NAME                            READY   STATUS    RESTARTS   AGE
+applogs-demo-58cf69c8d8-j2mfn   1/1     Running   0          2m
 ```
 
-You'll see errors intermittently.
-
-### Step 3: Check Logs (This is where the issue is!)
+`1/1 Running`, `0` restarts — from Kubernetes' point of view this pod is
+perfectly healthy. Save the pod name for the next steps:
 
 ```bash
-kubectl logs -n scenario-applogs <pod-name> | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
+POD=$(kubectl get pods -n scenario-applogs -l app=demo-app -o jsonpath='{.items[0].metadata.name}')
+echo "$POD"
 ```
 
-Copilot will parse the logs and identify:
+### Step 2: Generate Some Traffic
 
-- Database connection timeout errors
-- Connection pool exhaustion
-- Error patterns and frequency
-
-### Step 4: Get More Context
+The errors only happen while the app handles requests, so drive a little load
+through the `/api/data` endpoint (it fails ~40% of the time on purpose):
 
 ```bash
-# Get the last 50 lines of logs
-kubectl logs -n scenario-applogs <pod-name> --tail=50 | copilot -p "Explain these logs in plain English and how to fix the errors"
-
-# Stream logs in real-time and explain
-kubectl logs -n scenario-applogs <pod-name> -f | copilot -p "Explain these logs in plain English and how to fix the errors"
+kubectl run loadgen --rm -i --restart=Never --image=curlimages/curl -n scenario-applogs -- \
+  sh -c 'for i in $(seq 1 30); do curl -s -o /dev/null http://applogs-demo:8080/api/data; done; echo done'
 ```
 
-### Step 5: Interactive Analysis
+### Step 3: Read the Logs (the problem lives here)
 
 ```bash
-# Open an interactive Copilot session
-copilot
+kubectl logs "$POD" -n scenario-applogs
+```
 
-# Paste log output or kubectl command results
-# Ask specific questions about error patterns
+You'll see normal `INFO` lines interleaved with bursts of errors:
+
+```
+[...] [INFO]  [PID:1] [REQ:00013] Processing /api/data request
+[...] [ERROR] [PID:1] [REQ:00013] Database connection timeout after 30000ms
+[...] [ERROR] [PID:1] [REQ:00013] Failed to retrieve customer data from database
+[...] [WARN]  [PID:1] [REQ:00013] Retrying operation (attempt 1/3)
+[...] [ERROR] [PID:1] [REQ:00013] Retry failed: Connection pool exhausted
+```
+
+### Step 4: Quantify It
+
+Filter for just the error lines and count them to gauge severity:
+
+```bash
+# Show only the error/warning lines
+kubectl logs "$POD" -n scenario-applogs | grep -E 'ERROR|WARN'
+
+# Count errors
+kubectl logs "$POD" -n scenario-applogs | grep -c ERROR
+```
+
+**Root cause:** the application is up and passing health probes, but ~40% of
+`/api/data` calls fail with database connection timeouts and connection-pool
+exhaustion. None of this is visible in `kubectl get pods` — only in the logs.
+
+## Part B — Diagnose It with Copilot CLI
+
+This scenario is where Copilot CLI really shines: parsing a wall of log lines
+and summarizing the error pattern, frequency, and likely root cause for you.
+
+> **Important — don't pipe into Copilot.** The GitHub Copilot CLI (`copilot`)
+> does **not** read piped `stdin` as context. If you run
+> `kubectl logs ... | copilot -p "..."`, Copilot sees an empty prompt and
+> replies that there's no log data. Instead, embed the command's output
+> **inside** the prompt using shell command substitution `$(...)`.
+
+### Step 1: Confirm the Pod Looks Fine
+
+```bash
+copilot -p "Explain this Kubernetes pod status in plain English and tell me if anything is wrong:
+
+$(kubectl get pods -n scenario-applogs)"
+```
+
+Copilot will note the pod is Running and healthy — no obvious problem yet.
+
+### Step 2: Hand It the Logs and Ask for the Pattern
+
+This is the key step — feed the logs in and let Copilot find the issue:
+
+```bash
+copilot -p "Explain these application logs in plain English. What is the error pattern, how often is it happening, and how do I fix it?
+
+$(kubectl logs "$POD" -n scenario-applogs)"
+```
+
+Copilot will identify the database connection timeouts, the connection-pool
+exhaustion, the retry-then-fail pattern, and suggest remediations.
+
+### Step 3: Focus on Just the Errors
+
+For a tighter signal, send only the error lines:
+
+```bash
+copilot -p "These are the error lines from a service. Explain what is going wrong in plain English and how to fix it:
+
+$(kubectl logs "$POD" -n scenario-applogs | grep -E 'ERROR|WARN')"
+```
+
+> **Tip:** Because this `copilot` is agentic, you can also let it run the
+> commands itself instead of substituting output — just add `--allow-all-tools`
+> and describe the task:
+>
+> ```bash
+> copilot --allow-all-tools -p "The pod in namespace scenario-applogs is Running but may be logging errors. Pull its logs with kubectl, explain the error pattern in plain English, and tell me how to fix it."
+> ```
+
+### One-liner: status + logs in a single prompt
+
+```bash
+copilot -p "This pod looks healthy but may be failing requests. Explain what is wrong in plain English and how to fix it.
+
+=== STATUS ===
+$(kubectl get pods -n scenario-applogs)
+
+=== LOGS ===
+$(kubectl logs "$POD" -n scenario-applogs)"
 ```
 
 ## Root Causes in Real-World Scenarios
@@ -243,29 +305,18 @@ You'll see output like:
 ### 5. Use Copilot to Analyze
 
 ```bash
-# Pipe logs directly to Copilot
-kubectl logs -n scenario-applogs <pod-name> | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
+# Capture the pod name
+POD=$(kubectl get pods -n scenario-applogs -l app=demo-app -o jsonpath='{.items[0].metadata.name}')
 
-# Or save and analyze
-kubectl logs -n scenario-applogs <pod-name> > app-logs.txt
-cat app-logs.txt | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
+# Embed the logs into the prompt with $(...) — do NOT pipe into copilot
+copilot -p "Explain these logs in plain English and how to troubleshoot the errors:
 
-# Get specific error patterns
-kubectl logs -n scenario-applogs <pod-name> | grep ERROR | copilot -p "Explain these errors in plain English and how to fix them"
-```
+$(kubectl logs -n scenario-applogs "$POD")"
 
-**PowerShell equivalent:**
+# Focus on just the error lines
+copilot -p "Explain these errors in plain English and how to fix them:
 
-```powershell
-# Pipe logs directly to Copilot
-kubectl logs -n scenario-applogs <pod-name> | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
-
-# Or save and analyze
-kubectl logs -n scenario-applogs <pod-name> > app-logs.txt
-Get-Content app-logs.txt | copilot -p "Explain these logs in plain English and how to troubleshoot the errors"
-
-# Get specific error patterns
-kubectl logs -n scenario-applogs <pod-name> | Select-String "ERROR" | copilot -p "Explain these errors in plain English and how to fix them"
+$(kubectl logs -n scenario-applogs "$POD" | grep ERROR)"
 ```
 
 ### 6. Check Error Rate
@@ -356,20 +407,26 @@ kubectl delete namespace scenario-applogs
 - **Copilot CLI excels at log analysis** - it can summarize large logs and identify patterns quickly
 - **Real-world applications often fail partially** - not a total crash, but degraded functionality
 - **Monitoring and alerting are critical** - you need to know when error rates exceed thresholds
+- The `copilot` CLI does not read piped `stdin` — embed `kubectl logs` output in the prompt with `$(...)` to turn a wall of logs into a plain-English summary with fixes
 
 ## Advanced: Log Analysis with Copilot
 
-Save logs to a file for deeper analysis:
+Save logs to a file for deeper analysis, then embed the file contents into the
+prompt with `$(...)`:
 
 ```bash
 # Get all logs since pod start
-kubectl logs -n scenario-applogs <pod-name> > pod-logs.txt
+kubectl logs -n scenario-applogs "$POD" > pod-logs.txt
 
 # Ask Copilot specific questions about the saved logs
-cat pod-logs.txt | copilot -p "What is causing the database errors in these logs? Explain in plain English and how to fix it"
+copilot -p "What is causing the database errors in these logs? Explain in plain English and how to fix it:
+
+$(cat pod-logs.txt)"
 
 # Or have it suggest next troubleshooting steps
-cat pod-logs.txt | copilot -p "Based on these logs, what should I do next to troubleshoot and fix the errors?"
+copilot -p "Based on these logs, what should I do next to troubleshoot and fix the errors?
+
+$(cat pod-logs.txt)"
 ```
 
 Copilot will help you:

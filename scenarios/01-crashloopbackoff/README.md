@@ -38,42 +38,152 @@ crashloop-demo-7f8d4c9b2-abc12   0/1     CrashLoopBackOff   5          2m30s
 - `STATUS`: CrashLoopBackOff (repeatedly crashing)
 - `RESTARTS`: Increasing number (showing pod keeps restarting)
 
-## Diagnosing with Copilot CLI
+## Part A — Diagnose It Manually
 
-The pattern is the same for every command: run `kubectl`, then pipe the output
-into the GitHub Copilot CLI (`copilot`) with a prompt asking it to explain the
-output in plain English and troubleshoot the errors.
+This is the "old school" workflow: run `kubectl` yourself, read the output, and
+reason about what's wrong. Walk through these steps in order during the demo.
 
-### Step 1: Get Pod Status
+### Step 1: Find the Failing Pod
 
 ```bash
-kubectl get pods -n scenario-crashloop | copilot -p "Explain this pod status in plain English and tell me what is wrong"
+kubectl get pods -n scenario-crashloop
 ```
 
-Copilot will explain that the pod is in CrashLoopBackOff state and restarting repeatedly.
+```
+NAME                            READY   STATUS             RESTARTS      AGE
+crashloop-demo-877b6bdf-587x5   0/1     CrashLoopBackOff   5 (60s ago)   3m
+```
+
+Note the pod name, `0/1` READY, the `CrashLoopBackOff` status, and the climbing
+`RESTARTS` count. Save the pod name into a variable so the next commands are easy
+to copy/paste:
+
+```bash
+POD=$(kubectl get pods -n scenario-crashloop -o jsonpath='{.items[0].metadata.name}')
+echo "$POD"
+```
 
 ### Step 2: Describe the Pod
 
 ```bash
-kubectl describe pod <pod-name> -n scenario-crashloop | copilot -p "Explain these pod events in plain English and how to troubleshoot the errors"
+kubectl describe pod "$POD" -n scenario-crashloop
 ```
 
-Look for the "Events" section showing container restarts and error conditions.
+Scroll to the **`Last State`** and **`Events`** sections. You'll see the container
+terminating with **`Exit Code: 1`** and Kubernetes backing off between restarts:
 
-### Step 3: Check Pod Logs
+```
+Last State:     Terminated
+  Reason:       Error
+  Exit Code:    1
+...
+Warning  BackOff  ...  Back-off restarting failed container
+```
+
+This tells you the container is *starting and then exiting on its own* (an
+application error) — it is not being killed by Kubernetes (which would show
+`OOMKilled` or a failed probe).
+
+### Step 3: Read the Logs
+
+The describe output tells you *that* it crashed; the logs tell you *why*. Because
+the container is currently in a backoff/crashed state, use `--previous` to read
+the logs from the last crashed instance:
 
 ```bash
-kubectl logs <pod-name> -n scenario-crashloop | copilot -p "Explain these logs in plain English and how to fix the errors"
+kubectl logs "$POD" -n scenario-crashloop --previous
 ```
 
-This will show the error message:
-
 ```
+Application starting...
+Process ID: 1
+Attempting to load configuration...
 ERROR: Configuration file not found at /app/config/application.conf
+Details: [Errno 2] No such file or directory: '/app/config/application.conf'
 FATAL: Cannot start application without configuration
+HINT: Expected a volume mounted at /app/config containing application.conf
 ```
 
-Copilot will explain the root cause and suggest solutions.
+> If `--previous` returns "previous terminated container not found", the pod may
+> currently be running between restarts — just drop the flag and run
+> `kubectl logs "$POD" -n scenario-crashloop`.
+
+**Root cause:** the app needs a config file at `/app/config/application.conf`, but
+no volume is mounted there, so the file doesn't exist and the app exits with code 1.
+
+## Part B — Diagnose It with Copilot CLI
+
+Same investigation, but instead of eyeballing the output you hand it to the
+GitHub Copilot CLI (`copilot`) and let it translate the raw Kubernetes output
+into a plain-English explanation with concrete next steps. Great for newer team
+members or for triaging fast.
+
+> **Important — don't pipe into Copilot.** The GitHub Copilot CLI (`copilot`)
+> does **not** read piped `stdin` as context. If you run
+> `kubectl logs ... | copilot -p "..."`, Copilot sees an empty prompt and
+> replies that there's no log data. Instead, embed the command's output
+> **inside** the prompt using shell command substitution `$(...)`. That way the
+> actual text is part of the `-p` argument Copilot receives.
+
+### Step 1: Explain the Pod Status
+
+```bash
+copilot -p "Explain this Kubernetes pod status in plain English and tell me what is wrong:
+
+$(kubectl get pods -n scenario-crashloop)"
+```
+
+Copilot will explain that the pod is in CrashLoopBackOff and restarting repeatedly.
+
+### Step 2: Explain the Pod Events
+
+```bash
+copilot -p "Explain these pod events in plain English and tell me why the container is restarting:
+
+$(kubectl describe pod "$POD" -n scenario-crashloop)"
+```
+
+Copilot summarizes the `Exit Code: 1` / `BackOff` events and points to an
+application-level startup failure rather than a resource or probe problem.
+
+### Step 3: Explain the Logs and Get a Fix
+
+This is the key step — feed the crash logs in and ask for a remediation plan:
+
+```bash
+copilot -p "Explain these logs in plain English and tell me exactly how to fix the errors:
+
+$(kubectl logs "$POD" -n scenario-crashloop --previous 2>&1)"
+```
+
+Copilot reads the `FileNotFoundError`, identifies the missing
+`/app/config/application.conf`, and recommends mounting the config (e.g. via a
+ConfigMap) at `/app/config` — which is exactly the fix in the next section.
+
+> **Tip:** Because this `copilot` is agentic, you can also let it run the
+> commands itself instead of substituting output — just add `--allow-all-tools`
+> and describe the task:
+>
+> ```bash
+> copilot --allow-all-tools -p "The pod in namespace scenario-crashloop is in CrashLoopBackOff. Investigate with kubectl, explain the root cause in plain English, and tell me how to fix it."
+> ```
+
+### One-liner: hand Copilot everything at once
+
+For a fast triage, combine status, events, and logs into a single prompt:
+
+```bash
+copilot -p "This Kubernetes pod is failing. Explain what is wrong in plain English and give me step-by-step instructions to fix it.
+
+=== STATUS ===
+$(kubectl get pods -n scenario-crashloop)
+
+=== DESCRIBE ===
+$(kubectl describe pod "$POD" -n scenario-crashloop)
+
+=== LOGS ===
+$(kubectl logs "$POD" -n scenario-crashloop --previous 2>&1)"
+```
 
 ## Root Causes in Real-World Scenarios
 
@@ -181,27 +291,34 @@ Watch as the pod repeatedly crashes and restarts.
 ### 3. Examine Logs
 
 ```bash
-# Get current logs
-kubectl logs -n scenario-crashloop crashloop-demo-7f8d4c9b2-abc12
+# Capture the pod name
+POD=$(kubectl get pods -n scenario-crashloop -o jsonpath='{.items[0].metadata.name}')
 
-# Get logs from previous run (if available)
-kubectl logs -n scenario-crashloop crashloop-demo-7f8d4c9b2-abc12 --previous
+# Get logs from the last crashed instance
+kubectl logs -n scenario-crashloop "$POD" --previous
+
+# Or current logs if it happens to be running between restarts
+kubectl logs -n scenario-crashloop "$POD"
 ```
 
 ### 4. Get Detailed Descriptions
 
 ```bash
-kubectl describe pod -n scenario-crashloop crashloop-demo-7f8d4c9b2-abc12
+kubectl describe pod -n scenario-crashloop "$POD"
 ```
 
 ### 5. Use Copilot to Explain
 
 ```bash
-# Pipe the logs into Copilot and ask it to explain and troubleshoot
-kubectl logs -n scenario-crashloop crashloop-demo-7f8d4c9b2-abc12 | copilot -p "Explain these logs in plain English and how to fix the errors"
+# Embed the logs into the prompt with $(...) — do NOT pipe into copilot
+copilot -p "Explain these logs in plain English and how to fix the errors:
 
-# Or pipe the events in the same way
-kubectl get events -n scenario-crashloop | copilot -p "Explain these Kubernetes events in plain English and how to troubleshoot them"
+$(kubectl logs -n scenario-crashloop "$POD" --previous 2>&1)"
+
+# Or embed the events the same way
+copilot -p "Explain these Kubernetes events in plain English and how to troubleshoot them:
+
+$(kubectl get events -n scenario-crashloop)"
 ```
 
 ## Cleanup
@@ -215,5 +332,5 @@ kubectl delete namespace scenario-crashloop
 - **CrashLoopBackOff** means the container keeps exiting immediately
 - Always check pod logs with `--previous` flag to see logs from crashed container
 - Most often caused by configuration, environment, or permission issues
-- Piping kubectl output into `copilot` turns raw logs into a plain-English explanation with suggested fixes
+- The `copilot` CLI does not read piped `stdin` — embed kubectl output in the prompt with `$(...)` to turn raw logs into a plain-English explanation with fixes
 - Event descriptions provide insight into why restarts are happening

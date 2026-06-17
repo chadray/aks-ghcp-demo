@@ -25,31 +25,21 @@ spec:
     spec:
       containers:
       - name: app
-        image: docker.io/library/python:3.11-slim
-        imagePullPolicy: IfNotPresent
-        command: ["python3"]
-        args:
-        - "-c"
-        - |
-          import sys
-          import os
-          import time
-          print('Application starting...', flush=True)
-          print(f'Process ID: {os.getpid()}', flush=True)
-          print('Attempting to load configuration...', flush=True)
-          config_path = '/app/config/application.conf'
-          try:
-              with open(config_path, 'r') as f:
-                  config = f.read()
-              print(f'Configuration loaded from {config_path}', flush=True)
-          except FileNotFoundError as e:
-              print(f'ERROR: Configuration file not found at {config_path}', flush=True)
-              print(f'Details: {str(e)}', flush=True)
-              print('FATAL: Cannot start application without configuration', flush=True)
-              sys.exit(1)
-          except Exception as e:
-              print(f'ERROR: Unexpected error loading configuration: {str(e)}', flush=True)
-              sys.exit(1)
+        image: ghcpdemoacr.azurecr.io/crashloop-demo:v1
+        imagePullPolicy: Always
+        # The app reads its config from /app/config/application.conf, which is
+        # expected to be supplied by a volume mounted at /app/config.
+        #
+        # >>> THE BUG: that volume mount is missing. <<<
+        # Without it, the config file does not exist, the app exits with code 1,
+        # and Kubernetes restarts it repeatedly -> CrashLoopBackOff.
+        #
+        # To FIX, create the ConfigMap (see README) and uncomment the
+        # volumeMounts below plus the volumes block at the pod level:
+        # volumeMounts:
+        # - name: config
+        #   mountPath: /app/config
+        #   readOnly: true
         resources:
           requests:
             cpu: 100m
@@ -58,3 +48,7 @@ spec:
             cpu: 200m
             memory: 256Mi
       restartPolicy: Always
+      # volumes:
+      # - name: config
+      #   configMap:
+      #     name: app-config

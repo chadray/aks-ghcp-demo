@@ -116,4 +116,6 @@ Write-Host "View logs:"
 Write-Host "  kubectl logs -n scenario-keyvault -l app=keyvault-demo -f"
 Write-Host ""
 Write-Host "Troubleshoot with Copilot:"
-Write-Host "  kubectl describe pod -n scenario-keyvault -l app=keyvault-demo | gh copilot explain"
+Write-Host '  copilot -p "Explain these pod events in plain English and how to fix them:'
+Write-Host ''
+Write-Host '  $(kubectl describe pod -n scenario-keyvault -l app=keyvault-demo)"'

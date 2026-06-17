@@ -53,39 +53,8 @@ spec:
       serviceAccountName: keyvault-demo-sa
       containers:
       - name: app
-        image: docker.io/library/python:3.11-slim
-        imagePullPolicy: IfNotPresent
-        command: ["python3"]
-        args:
-        - "-c"
-        - |
-          import time
-          import os
-          import sys
-
-          SECRET_PATH = '/mnt/secrets/demo-secret'
-
-          print('=== Key Vault Secret Volume Demo ===', flush=True)
-          print(f'Process ID: {os.getpid()}', flush=True)
-          print(f'Looking for secret at: {SECRET_PATH}', flush=True)
-          print('', flush=True)
-
-          while True:
-              try:
-                  with open(SECRET_PATH, 'r') as f:
-                      secret_value = f.read().strip()
-                  print(f'[OK] Secret mounted successfully. Value length: {len(secret_value)} chars', flush=True)
-                  print(f'[OK] Secret preview: {secret_value[:4]}****', flush=True)
-              except FileNotFoundError:
-                  print(f'[ERROR] Secret file not found at {SECRET_PATH}', flush=True)
-                  print('[ERROR] The CSI secret volume may not be mounted correctly', flush=True)
-              except PermissionError:
-                  print(f'[ERROR] Permission denied reading {SECRET_PATH}', flush=True)
-              except Exception as e:
-                  print(f'[ERROR] Unexpected error: {e}', flush=True)
-
-              print('[INFO] Next check in 30 seconds...', flush=True)
-              time.sleep(30)
+        image: ghcpdemoacr.azurecr.io/keyvault-demo:v1
+        imagePullPolicy: Always
         volumeMounts:
         - name: secrets-store
           mountPath: /mnt/secrets
