@@ -11,6 +11,15 @@ This scenario demonstrates how to securely mount Azure Key Vault secrets into a 
 
 The pod uses a federated identity credential to authenticate to Key Vault without any passwords or connection strings. The secret is mounted as a file inside the container.
 
+> **This scenario deploys broken on purpose.** The infrastructure (workload
+> identity, RBAC, CSI driver, private endpoint) is all healthy, but `setup.sh` /
+> `setup.ps1` inject a realistic Azure misconfiguration after seeding the secret:
+> the Key Vault **private DNS A record is overwritten with the wrong IP**. The
+> Key Vault FQDN then resolves to an address with no listener, the Secrets Store
+> CSI driver cannot reach Key Vault, and the secret volume fails to mount — the
+> pod is stuck in `ContainerCreating` with a `FailedMount` event. The goal is to
+> diagnose this DNS/private-endpoint issue and fix it.
+
 ## Architecture
 
 ```
@@ -51,6 +60,25 @@ The pod uses a federated identity credential to authenticate to Key Vault withou
 4. The pod's ServiceAccount is annotated with the managed identity's client ID
 5. When the pod starts, the CSI driver authenticates to Key Vault using the federated token and mounts the secret as a file
 6. All traffic to Key Vault goes through the **private endpoint** in the VNet
+7. The Key Vault FQDN (`<vault>.vault.azure.net`) resolves to the private
+   endpoint's private IP via the `privatelink.vaultcore.azure.net` **private DNS
+   zone**. If that A record is wrong, every step above is healthy but the CSI
+   driver still can't reach Key Vault — which is exactly the fault this scenario
+   injects.
+
+## The Injected Fault (and the fix)
+
+`setup.sh` overwrites the Key Vault A record in the
+`privatelink.vaultcore.azure.net` zone with an unused in-subnet IP
+(`10.1.16.250`). Resolution succeeds but connections hang, so the CSI mount
+times out with `context deadline exceeded`.
+
+To resolve the scenario, restore the correct record (read back from the Key
+Vault private endpoint) with the fix mode:
+
+```bash
+./setup.sh ghcp-demo-rg --fix-dns          # PowerShell: ./setup.ps1 -ResourceGroup ghcp-demo-rg -FixDns
+```
 
 ## Prerequisites
 
@@ -126,7 +154,17 @@ cd scenarios/04-keyvault-secret-volume
 kubectl get pods -n scenario-keyvault -w
 ```
 
-When working correctly, the pod should be in `Running` state with the secret mounted:
+Because the scenario is broken on purpose, the pod will **stay in
+`ContainerCreating`** and never become `Ready`:
+
+```
+NAME                             READY   STATUS              RESTARTS   AGE
+keyvault-demo-7d9c8b6f4-abcde    0/1     ContainerCreating   0          2m
+```
+
+That is the expected starting point — work through the diagnosis below. Once you
+restore the DNS record (`./setup.sh ghcp-demo-rg --fix-dns`), the pod mounts the
+secret and logs:
 
 ```bash
 $ kubectl logs -n scenario-keyvault -l app=keyvault-demo
@@ -296,18 +334,34 @@ Warning  FailedMount  ... access denied ...
 - Managed identity has `Key Vault Secrets User` role on the Key Vault
 - The secret name in SecretProviderClass matches the actual secret in Key Vault
 
-#### DNS Resolution Failure
+#### DNS / Private Endpoint Resolution Failure  ← this scenario's root cause
 
-If the private endpoint DNS isn't resolving:
+If the Key Vault FQDN resolves to the wrong IP (or doesn't resolve), the CSI
+driver can't reach Key Vault and the mount **times out**:
 
 ```
-Warning  FailedMount  ... could not resolve host ...
+Warning  FailedMount  ... MountVolume.SetUp failed for volume "secrets-store" :
+rpc error: code = DeadlineExceeded desc = context deadline exceeded
 ```
+
+(If DNS fails to resolve at all you'd instead see `... could not resolve host ...`.)
 
 **Check:**
-- Private DNS zone `privatelink.vaultcore.azure.net` exists and is linked to the VNet
-- The private endpoint has a DNS zone group configured
+- The A record for the vault in the `privatelink.vaultcore.azure.net` private DNS
+  zone points to the **private endpoint's** IP (not a wrong/stale address):
+  ```bash
+  az network private-dns record-set a list -g ghcp-demo-rg -z privatelink.vaultcore.azure.net -o table
+  az network private-endpoint show -g ghcp-demo-rg -n <vault>-pe --query "customDnsConfigs[0].ipAddresses" -o tsv
+  ```
+- The private DNS zone is linked to the VNet and the private endpoint has a DNS
+  zone group configured
 - AKS uses Azure-provided DNS (not custom DNS servers)
+
+**Fix (this scenario):** restore the correct record automatically with
+
+```bash
+./setup.sh ghcp-demo-rg --fix-dns          # PowerShell: ./setup.ps1 -ResourceGroup ghcp-demo-rg -FixDns
+```
 
 ## Manual Setup (Without Script)
 
