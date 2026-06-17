@@ -32,8 +32,8 @@ spec:
         #
         # >>> THE BUG: wrong/nonexistent image tag. <<<
         # To FIX, point this at a tag that actually exists, e.g.:
-        #   image: ghcpdemoacr.azurecr.io/imagepull-demo:v1
-        image: ghcpdemoacr.azurecr.io/imagepull-demo:latest
+        #   image: ${ACR_LOGIN_SERVER}/imagepull-demo:v1
+        image: ${ACR_LOGIN_SERVER}/imagepull-demo:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

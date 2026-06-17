@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: ghcpdemoacr.azurecr.io/crashloop-demo:v1
+        image: ${ACR_LOGIN_SERVER}/crashloop-demo:v1
         imagePullPolicy: Always
         # The app reads its config from /app/config/application.conf, which is
         # expected to be supplied by a volume mounted at /app/config.

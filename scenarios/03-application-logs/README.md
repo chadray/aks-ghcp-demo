@@ -237,9 +237,19 @@ kubectl logs -n scenario-applogs <pod-name> | grep ERROR | wc -l
 
 ### 1. Deploy the Scenario
 
+The manifest references the registry via a `${ACR_LOGIN_SERVER}` placeholder, so
+use the deploy helper, which discovers the cluster's attached ACR at runtime and
+substitutes it (run from the repo's `scenarios/` folder):
+
 ```bash
-kubectl apply -f deployment.yaml
+./deploy.sh 03-application-logs
 ```
+
+Windows / PowerShell: `./deploy.ps1 03-application-logs`
+
+> Plain `kubectl apply -f deployment.yaml` will fail because the placeholder is
+> not a valid image name. If you prefer raw kubectl, substitute first:
+> `ACR=$(az acr list -g ghcp-demo-rg --query "[0].loginServer" -o tsv); sed "s|\${ACR_LOGIN_SERVER}|$ACR|g" deployment.yaml | kubectl apply -f -`
 
 ### 2. Verify Pod is Running
 

@@ -59,12 +59,14 @@ The pod uses a federated identity credential to authenticate to Key Vault withou
 - Azure CLI authenticated with access to the resource group
 - `jq` installed (for the setup script)
 
-> **Container image:** The pod runs `ghcpdemoacr.azurecr.io/keyvault-demo:v1`,
-> built from [app.py](app.py) and pushed to the ACR attached to the cluster.
-> To rebuild it:
+> **Container image:** The pod runs `<your-acr>.azurecr.io/keyvault-demo:v1`,
+> built from [app.py](app.py). The manifest uses a `${ACR_LOGIN_SERVER}`
+> placeholder which `setup.sh` / `setup.ps1` resolve from the Bicep
+> `acrLoginServer` output, so it is not tied to a specific registry name.
+> To (re)build the image into your registry (default `ghcpdemoacr`):
 >
 > ```bash
-> az acr build --registry ghcpdemoacr --image keyvault-demo:v1 scenarios/04-keyvault-secret-volume
+> az acr build --registry $(az deployment group show -g ghcp-demo-rg -n main --query properties.outputs.acrName.value -o tsv) --image keyvault-demo:v1 scenarios/04-keyvault-secret-volume
 > ```
 
 ## Quick Start
@@ -349,6 +351,7 @@ Replace these placeholders in `deployment.yaml`:
 - `${WORKLOAD_IDENTITY_CLIENT_ID}` → managed identity client ID
 - `${KEY_VAULT_NAME}` → Key Vault name
 - `${TENANT_ID}` → Azure tenant ID
+- `${ACR_LOGIN_SERVER}` → registry login server (e.g. `ghcpdemoacr.azurecr.io`)
 
 ### 4. Apply
 

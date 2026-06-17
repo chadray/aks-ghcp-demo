@@ -33,10 +33,17 @@ OUTPUTS=$(az deployment group show \
 KEY_VAULT_NAME=$(echo "$OUTPUTS" | jq -r '.keyVaultName.value')
 WORKLOAD_IDENTITY_CLIENT_ID=$(echo "$OUTPUTS" | jq -r '.workloadIdentityClientId.value')
 TENANT_ID=$(echo "$OUTPUTS" | jq -r '.tenantId.value')
+ACR_LOGIN_SERVER=$(echo "$OUTPUTS" | jq -r '.acrLoginServer.value // empty')
+
+# Fall back to discovering the registry if the deployment predates the ACR output.
+if [[ -z "$ACR_LOGIN_SERVER" ]]; then
+  ACR_LOGIN_SERVER=$(az acr list -g "$RESOURCE_GROUP" --query "[0].loginServer" -o tsv)
+fi
 
 echo "  Key Vault Name:            $KEY_VAULT_NAME"
 echo "  Workload Identity Client:  $WORKLOAD_IDENTITY_CLIENT_ID"
 echo "  Tenant ID:                 $TENANT_ID"
+echo "  ACR Login Server:          $ACR_LOGIN_SERVER"
 echo ""
 
 # Ensure the current user has Key Vault Secrets Officer role to seed secrets
@@ -78,6 +85,7 @@ echo "[3/4] Generating deployment manifest..."
 sed -e "s|\${WORKLOAD_IDENTITY_CLIENT_ID}|${WORKLOAD_IDENTITY_CLIENT_ID}|g" \
     -e "s|\${KEY_VAULT_NAME}|${KEY_VAULT_NAME}|g" \
     -e "s|\${TENANT_ID}|${TENANT_ID}|g" \
+    -e "s|\${ACR_LOGIN_SERVER}|${ACR_LOGIN_SERVER}|g" \
     "${SCRIPT_DIR}/deployment.yaml" > "${SCRIPT_DIR}/deployment-generated.yaml"
 
 echo "  Generated: deployment-generated.yaml"

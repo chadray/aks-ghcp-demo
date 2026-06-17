@@ -22,6 +22,12 @@
     },
     "keyVaultName": {
       "value": "aks-ghcp-demo-kv"
+    },
+    "acrName": {
+      "value": "ghcpdemoacr"
+    },
+    "acrSku": {
+      "value": "Basic"
     }
   }
 }

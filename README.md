@@ -60,15 +60,19 @@ This demo includes:
 
 ### 1. Deploy AKS Infrastructure
 
+The Bicep template provisions the AKS cluster **and** an Azure Container Registry,
+granting the cluster's kubelet identity `AcrPull` so pods can pull images without
+image-pull secrets (the IaC equivalent of `az aks update --attach-acr`).
+
 ```bash
 cd infrastructure
 az deployment group create \
-  --resource-group my-rg \
+  --resource-group ghcp-demo-rg \
   --template-file main.bicep \
-  --parameters location=eastus clusterName=aks-ghcp-demo
+  --parameters parameters.json
 
 # Get cluster credentials
-az aks get-credentials --resource-group my-rg --name aks-ghcp-demo
+az aks get-credentials --resource-group ghcp-demo-rg --name aks-ghcp-demo --overwrite-existing
 ```
 
 **PowerShell equivalent:**
@@ -76,27 +80,80 @@ az aks get-credentials --resource-group my-rg --name aks-ghcp-demo
 ```powershell
 cd infrastructure
 az deployment group create `
-  --resource-group my-rg `
+  --resource-group ghcp-demo-rg `
   --template-file main.bicep `
-  --parameters location=eastus clusterName=aks-ghcp-demo
+  --parameters parameters.json
 
 # Get cluster credentials
-az aks get-credentials --resource-group my-rg --name aks-ghcp-demo
+az aks get-credentials --resource-group ghcp-demo-rg --name aks-ghcp-demo --overwrite-existing
 ```
+
+> The registry name (`acrName`, default `ghcpdemoacr`) is configurable in
+> `infrastructure/parameters.json`. The scenarios discover it dynamically, so you
+> can change it without editing any manifests. See
+> [`infrastructure/README.md`](infrastructure/README.md) for details.
 
 ### 2. Deploy a Scenario
 
-Each scenario can be deployed independently:
+The scenario manifests reference the container registry through a
+`${ACR_LOGIN_SERVER}` placeholder rather than a hard-coded name, so they are not
+tied to any specific ACR. A deploy helper discovers the cluster's **attached
+Azure Container Registry at runtime**, substitutes the placeholder, and applies
+the manifest. **Run it from the `scenarios/` folder:**
 
 ```bash
-# Deploy Scenario 1: CrashLoopBackOff
-cd scenarios/01-crashloopbackoff
-kubectl create namespace scenario-1
-kubectl apply -f deployment.yaml -n scenario-1
+cd scenarios
 
-# Check pod status
-kubectl get pods -n scenario-1
+# Deploy a scenario (auto-discovers the ACR attached to the cluster)
+./deploy.sh 01-crashloopbackoff
+
+# Optionally build & push the image first, then deploy
+./deploy.sh 01-crashloopbackoff --build
+
+# Check pod status (namespace is printed at the end of the deploy)
+kubectl get pods -n scenario-crashloop
 ```
+
+**PowerShell equivalent:**
+
+```powershell
+cd scenarios
+
+# Deploy a scenario (auto-discovers the ACR attached to the cluster)
+./deploy.ps1 01-crashloopbackoff
+
+# Optionally build & push the image first, then deploy
+./deploy.ps1 01-crashloopbackoff -Build
+
+kubectl get pods -n scenario-crashloop
+```
+
+Valid scenario folders: `01-crashloopbackoff`, `02-imagepullbackoff`,
+`03-application-logs`, `04-keyvault-secret-volume`.
+
+> **Why not plain `kubectl apply -f deployment.yaml`?** The manifest contains the
+> literal `${ACR_LOGIN_SERVER}` placeholder, which is not a valid image name, so a
+> raw apply would fail. The helper resolves it for you. If you must use kubectl
+> directly, substitute first:
+>
+> ```bash
+> ACR=$(az acr list -g ghcp-demo-rg --query "[0].loginServer" -o tsv)
+> sed "s|\${ACR_LOGIN_SERVER}|$ACR|g" deployment.yaml | kubectl apply -f -
+> ```
+
+The helper honors these overrides (env vars for bash, parameters for PowerShell)
+if your cluster/registry differ from the defaults: `RESOURCE_GROUP`
+(default `ghcp-demo-rg`), `CLUSTER_NAME` (default `aks-ghcp-demo`), `ACR_NAME`,
+and `ACR_LOGIN_SERVER`.
+
+> **Scenario 4 is different.** It needs Key Vault + workload-identity values from
+> the Bicep deployment, so deploy it with its own setup script instead of
+> `deploy.sh`:
+>
+> ```bash
+> cd scenarios/04-keyvault-secret-volume
+> ./setup.sh ghcp-demo-rg        # PowerShell: ./setup.ps1 -ResourceGroup ghcp-demo-rg
+> ```
 
 ### 3. Use GitHub Copilot CLI to Troubleshoot
 
@@ -127,6 +184,8 @@ aks-ghcp-demo/
 │   ├── parameters.json
 │   └── README.md
 ├── scenarios/
+│   ├── deploy.sh            # Dynamic deployer (bash) — resolves ACR + applies
+│   ├── deploy.ps1           # Dynamic deployer (PowerShell)
 │   ├── 01-crashloopbackoff/
 │   │   ├── Dockerfile
 │   │   ├── app.py (or app.js)
@@ -197,15 +256,29 @@ copilot   # Open an interactive Copilot session to paste output and ask question
 
 ## Building Container Images
 
-For development/testing, build and push images to your registry:
+Each scenario ships a `Dockerfile`. Build and push images to the cluster's
+attached registry with `az acr build` (no local Docker required) — or let the
+deploy helper do it with `--build`:
 
 ```bash
-cd scenarios/01-crashloopbackoff
-docker build -t <your-registry>/scenario-1:v1.0 .
-docker push <your-registry>/scenario-1:v1.0
+# Discover the registry name from the resource group
+ACR_NAME=$(az acr list -g ghcp-demo-rg --query "[0].name" -o tsv)
+
+# Build & push directly in ACR
+az acr build --registry "$ACR_NAME" --image crashloop-demo:v1 scenarios/01-crashloopbackoff
+
+# …or build + deploy in one step
+cd scenarios && ./deploy.sh 01-crashloopbackoff --build
 ```
 
-Update the `deployment.yaml` image reference as needed.
+The manifests reference images as `${ACR_LOGIN_SERVER}/<image>:<tag>`; the deploy
+helper substitutes the real login server at apply time, so you never hard-code a
+registry name.
+
+> **Note for Scenario 2 (ImagePullBackOff):** only the `:v1` tag is pushed on
+> purpose — the deployment intentionally requests `:latest` (which doesn't exist)
+> so the image-pull failure can be demonstrated. Don't push `:latest` for that
+> scenario unless you want to "fix" it.
 
 ## Next Steps
 

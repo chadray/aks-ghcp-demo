@@ -53,7 +53,7 @@ spec:
       serviceAccountName: keyvault-demo-sa
       containers:
       - name: app
-        image: ghcpdemoacr.azurecr.io/keyvault-demo:v1
+        image: ${ACR_LOGIN_SERVER}/keyvault-demo:v1
         imagePullPolicy: Always
         volumeMounts:
         - name: secrets-store

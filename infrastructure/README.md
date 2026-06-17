@@ -83,6 +83,7 @@ The default configuration creates:
 - **Secrets Store CSI Driver**: Enabled with secret rotation
 - **Workload Identity**: OIDC issuer + workload identity enabled
 - **Managed Identity**: Federated with Key Vault Secrets User role
+- **Container Registry**: Azure Container Registry with the AKS kubelet identity granted `AcrPull` (the IaC equivalent of `az aks update --attach-acr`)
 
 ## Customization
 
@@ -93,8 +94,19 @@ Modify `parameters.json` to change:
 - `nodeCount` - Number of nodes
 - `vmSize` - VM size for nodes
 - `kubernetesVersion` - Kubernetes version
+- `acrName` - Azure Container Registry name (globally unique, alphanumeric, 5-50 chars)
+- `acrSku` - ACR SKU (`Basic`, `Standard`, or `Premium`)
 
-Then redeploy with new parameters:
+> The scenarios are **not** tied to a specific registry name. They reference the
+> registry through a `${ACR_LOGIN_SERVER}` placeholder and the deploy helper
+> (`scenarios/deploy.sh` / `deploy.ps1`) discovers the cluster's attached ACR at
+> runtime. Change `acrName` here and the scenarios still work with no edits.
+
+The deployment exposes `acrName` and `acrLoginServer` as outputs:
+
+```bash
+az deployment group show -g ghcp-demo-rg -n main --query properties.outputs.acrLoginServer.value -o tsv
+```
 
 ```bash
 az deployment group create \

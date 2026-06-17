@@ -51,10 +51,17 @@ $outputs = $outputsJson | ConvertFrom-Json
 $KeyVaultName             = $outputs.keyVaultName.value
 $WorkloadIdentityClientId = $outputs.workloadIdentityClientId.value
 $TenantId                 = $outputs.tenantId.value
+$AcrLoginServer           = $outputs.acrLoginServer.value
+
+# Fall back to discovering the registry if the deployment predates the ACR output.
+if (-not $AcrLoginServer) {
+    $AcrLoginServer = az acr list -g $ResourceGroup --query "[0].loginServer" -o tsv
+}
 
 Write-Host "  Key Vault Name:            $KeyVaultName"
 Write-Host "  Workload Identity Client:  $WorkloadIdentityClientId"
 Write-Host "  Tenant ID:                 $TenantId"
+Write-Host "  ACR Login Server:          $AcrLoginServer"
 Write-Host ""
 
 Write-Host "[2/4] Seeding demo secret into Key Vault..."
@@ -97,6 +104,7 @@ $content = Get-Content -Path $templatePath -Raw
 $content = $content.Replace('${WORKLOAD_IDENTITY_CLIENT_ID}', $WorkloadIdentityClientId)
 $content = $content.Replace('${KEY_VAULT_NAME}',              $KeyVaultName)
 $content = $content.Replace('${TENANT_ID}',                   $TenantId)
+$content = $content.Replace('${ACR_LOGIN_SERVER}',            $AcrLoginServer)
 Set-Content -Path $generatedPath -Value $content -NoNewline
 
 Write-Host "  Generated: deployment-generated.yaml"

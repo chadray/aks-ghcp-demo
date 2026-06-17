@@ -11,6 +11,12 @@ backoff retry loop. In this lab the cluster is attached to the
 `ghcpdemoacr` ACR, and the deployment asks for a tag (`:latest`) that was never
 pushed.
 
+> **Registry name:** `ghcpdemoacr` is just the default `acrName` from
+> `infrastructure/parameters.json`, used in the examples below. The actual
+> `deployment.yaml` uses a `${ACR_LOGIN_SERVER}` placeholder and the deploy
+> helper resolves your cluster's registry dynamically — if you set a different
+> `acrName`, substitute it in the example commands.
+
 ## The Problem
 
 The deployment references an image **tag** that was never pushed to the
@@ -263,9 +269,19 @@ spec:
 
 ### 1. Deploy the Scenario
 
+The manifest references the registry via a `${ACR_LOGIN_SERVER}` placeholder, so
+use the deploy helper, which discovers the cluster's attached ACR at runtime and
+substitutes it (run from the repo's `scenarios/` folder):
+
 ```bash
-kubectl apply -f deployment.yaml
+./deploy.sh 02-imagepullbackoff
 ```
+
+Windows / PowerShell: `./deploy.ps1 02-imagepullbackoff`
+
+> Plain `kubectl apply -f deployment.yaml` will fail because the placeholder is
+> not a valid image name. If you prefer raw kubectl, substitute first:
+> `ACR=$(az acr list -g ghcp-demo-rg --query "[0].loginServer" -o tsv); sed "s|\${ACR_LOGIN_SERVER}|$ACR|g" deployment.yaml | kubectl apply -f -`
 
 ### 2. Monitor Pod Status
 

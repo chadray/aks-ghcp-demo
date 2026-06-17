@@ -6,6 +6,17 @@ param nodeCount int = 2
 param kubernetesVersion string = '1.28'
 param keyVaultName string = '${clusterName}-kv'
 
+@description('Globally unique name for the Azure Container Registry (alphanumeric only, 5-50 chars). The scenarios discover this registry dynamically, so it is not hard-coded anywhere.')
+param acrName string = 'ghcpdemoacr'
+
+@description('SKU for the Azure Container Registry.')
+@allowed([
+  'Basic'
+  'Standard'
+  'Premium'
+])
+param acrSku string = 'Basic'
+
 // ─── Virtual Network ───────────────────────────────────────────────────────────
 
 resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
@@ -101,8 +112,35 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-01-01' = {
   }
 }
 
-// ─── Key Vault ─────────────────────────────────────────────────────────────────
+// ─── Azure Container Registry ──────────────────────────────────────────────────
 
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: acrName
+  location: location
+  sku: {
+    name: acrSku
+  }
+  properties: {
+    adminUserEnabled: false
+  }
+}
+
+// Grant the AKS kubelet (node) identity AcrPull so pods can pull images from the
+// registry without image pull secrets. This is the IaC equivalent of
+// `az aks update --attach-acr <acrName>`.
+var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerRegistry.id, aksCluster.id, acrPullRoleId)
+  scope: containerRegistry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: aksCluster.properties.identityProfile.kubeletidentity.objectId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ─── Key Vault ─────────────────────────────────────────────────────────────────
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
   location: location
@@ -223,3 +261,5 @@ output keyVaultName string = keyVault.name
 output keyVaultUri string = keyVault.properties.vaultUri
 output workloadIdentityClientId string = kvWorkloadIdentity.properties.clientId
 output tenantId string = subscription().tenantId
+output acrName string = containerRegistry.name
+output acrLoginServer string = containerRegistry.properties.loginServer
